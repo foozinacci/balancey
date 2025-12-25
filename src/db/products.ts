@@ -48,7 +48,7 @@ export async function getProduct(id: string): Promise<Product | undefined> {
 
 // Get all active products
 export async function getActiveProducts(): Promise<Product[]> {
-  return db.products.where('isActive').equals(1).toArray();
+  return db.products.filter(p => p.isActive === true).toArray();
 }
 
 // Get all products

@@ -72,6 +72,12 @@ export function Dashboard() {
 
   return (
     <div className="p-4 space-y-4">
+      {/* Header row - matches Clients/Inventory */}
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-bold text-text-primary">Dashboard</h1>
+        <Button onClick={() => navigate('/orders/new')}>+ New Order</Button>
+      </div>
+
       {/* KPIs - 2x3 Grid */}
       <div className="grid grid-cols-2 gap-3">
         {/* Row 1: Margins */}
@@ -123,37 +129,34 @@ export function Dashboard() {
           <div className="text-sm text-silver mt-1">Late</div>
         </Card>
         <Card className="text-center animate-fade-in-up stagger-6">
-          <div
-            className={`text-2xl font-bold font-mono ${kpis.lowInventoryCount > 0 ? 'text-gold' : 'text-text-primary'
-              }`}
-          >
-            {kpis.lowInventoryCount}
+          <div className="space-y-0.5">
+            <div className="flex justify-center gap-1 text-lg font-bold font-mono text-lime">
+              <span>R:</span>
+              <span>{formatWeight(kpis.regularStockGrams, 'g')}</span>
+            </div>
+            <div className="flex justify-center gap-1 text-lg font-bold font-mono text-gold">
+              <span>P:</span>
+              <span>{formatWeight(kpis.premiumStockGrams, 'g')}</span>
+            </div>
           </div>
-          <div className="text-sm text-silver mt-1">Low Stock</div>
+          <div className="text-sm text-silver mt-1">Stock Left</div>
         </Card>
       </div>
 
-      {/* Actions */}
-      <div className="flex gap-3 animate-fade-in-up stagger-5">
-        <Button
-          onClick={() => navigate('/orders/new')}
-          className="flex-1"
-        >
-          + New Order
-        </Button>
-        <Button
-          variant="secondary"
-          onClick={() => setShowNewCustomer(true)}
-        >
-          + Customer
-        </Button>
-      </div>
+      {/* Quick Action */}
+      <button
+        onClick={() => setShowNewCustomer(true)}
+        className="w-full px-4 py-2.5 rounded-xl font-semibold transition-all animate-fade-in-up"
+        style={{ backgroundColor: '#c9a050', color: '#050810' }}
+      >
+        + Client
+      </button>
 
       {/* Search */}
       <div className="animate-fade-in-up" style={{ animationDelay: '0.3s' }}>
         <Input
           type="search"
-          placeholder="Search customers..."
+          placeholder="Search clients..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
         />
@@ -165,8 +168,8 @@ export function Dashboard() {
           <Card className="text-center py-8">
             <p className="text-silver">
               {customers.length === 0
-                ? 'No customers yet. Add one to get started!'
-                : 'No customers match your search.'}
+                ? 'No clients yet. Add one to get started!'
+                : 'No clients match your search.'}
             </p>
           </Card>
         ) : (
@@ -184,11 +187,11 @@ export function Dashboard() {
       <Modal
         isOpen={showNewCustomer}
         onClose={() => setShowNewCustomer(false)}
-        title="New Customer"
+        title="New Client"
       >
         <div className="space-y-4">
           <Input
-            label="Customer Name"
+            label="Client Name"
             placeholder="Enter name..."
             value={newCustomerName}
             onChange={(e) => setNewCustomerName(e.target.value)}

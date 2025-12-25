@@ -51,6 +51,7 @@ export function Layout({ children }: LayoutProps) {
   const navItems = [
     { path: '/', label: 'Home', icon: HomeIcon },
     { path: '/inventory', label: 'Inventory', icon: BoxIcon },
+    { path: '/clients', label: 'Clients', icon: UsersIcon },
     { path: '/settings', label: 'Settings', icon: SettingsIcon },
   ];
 
@@ -63,32 +64,35 @@ export function Layout({ children }: LayoutProps) {
       {/* Three.js animated background */}
       <ThreeBackground />
 
-      {/* Header */}
-      <header className="glass-card rounded-none border-x-0 border-t-0 px-4 py-1 flex items-center justify-between sticky top-0 z-10">
-        <div className="w-24" /> {/* Spacer */}
-        <Link
-          to="/"
-          onClick={handleNavClick}
-          className="flex items-center justify-center"
-        >
-          <img
-            src="https://i.ibb.co/cSgYrmf9/ei-1766675949085-removebg-preview.png"
-            alt="Balancey"
-            className="h-20 w-auto"
-            style={{ filter: 'drop-shadow(0 0 15px rgba(127, 255, 0, 0.4))' }}
-          />
-        </Link>
-        <div className="w-24">
-          <LiveClock />
-        </div>
-      </header>
+      {/* Mobile-width container for all content */}
+      <div className="w-full max-w-md mx-auto flex flex-col min-h-[100dvh]">
+        {/* Header */}
+        <header className="glass-card rounded-none border-x-0 border-t-0 px-4 py-1 flex items-center justify-between sticky top-0 z-10">
+          <div className="w-24" /> {/* Spacer */}
+          <Link
+            to="/"
+            onClick={handleNavClick}
+            className="flex items-center justify-center"
+          >
+            <img
+              src="https://i.ibb.co/cSgYrmf9/ei-1766675949085-removebg-preview.png"
+              alt="Balancey"
+              className="h-16 w-auto"
+              style={{ filter: 'drop-shadow(0 0 15px rgba(127, 255, 0, 0.4))' }}
+            />
+          </Link>
+          <div className="w-24">
+            <LiveClock />
+          </div>
+        </header>
 
-      {/* Main content */}
-      <main className="flex-1 overflow-y-auto pb-24 relative z-0">{children}</main>
+        {/* Main content */}
+        <main className="flex-1 overflow-y-auto pb-20 relative z-0">{children}</main>
+      </div>
 
-      {/* Bottom navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 glass-card rounded-none border-x-0 border-b-0 safe-bottom z-10">
-        <div className="flex items-center justify-around h-16">
+      {/* Bottom navigation - mobile style */}
+      <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md glass-card rounded-t-2xl border-x-0 border-b-0 safe-bottom z-10">
+        <div className="flex items-center justify-around h-14">
           {navItems.map((item) => {
             const isActive = location.pathname === item.path;
             const Icon = item.icon;
@@ -102,8 +106,8 @@ export function Layout({ children }: LayoutProps) {
                   : 'text-silver hover:text-silver-light'
                   }`}
               >
-                <Icon className="w-6 h-6" />
-                <span className="text-xs mt-1 font-medium">{item.label}</span>
+                <Icon className="w-5 h-5" />
+                <span className="text-xs mt-0.5 font-medium">{item.label}</span>
               </Link>
             );
           })}
@@ -199,6 +203,23 @@ function SettingsIcon({ className }: { className?: string }) {
         strokeLinecap="round"
         strokeLinejoin="round"
         d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+      />
+    </svg>
+  );
+}
+function UsersIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
       />
     </svg>
   );

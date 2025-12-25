@@ -91,11 +91,50 @@ export function useSettings(): Settings | null {
   return settings ?? null;
 }
 
+// Waste history with product names
+export interface WasteRecord {
+  id: string;
+  productId: string;
+  productName: string;
+  quality: 'REGULAR' | 'PREMIUM';
+  gramsAdjustment: number;
+  note: string;
+  createdAt: number;
+}
+
+export function useWasteHistory(): WasteRecord[] {
+  const records = useLiveQuery(async () => {
+    const adjustments = await db.inventoryAdjustments
+      .filter(a => a.type === 'WASTE')
+      .reverse()
+      .sortBy('createdAt');
+
+    const products = await db.products.toArray();
+    const productMap = new Map(products.map(p => [p.id, p]));
+
+    return adjustments.map(a => {
+      const product = productMap.get(a.productId);
+      return {
+        id: a.id,
+        productId: a.productId,
+        productName: product?.name ?? 'Unknown',
+        quality: (product?.quality ?? 'REGULAR') as 'REGULAR' | 'PREMIUM',
+        gramsAdjustment: Math.abs(a.gramsAdjustment),
+        note: a.note,
+        createdAt: a.createdAt,
+      };
+    });
+  }, []);
+
+  return records ?? [];
+}
+
 // Dashboard KPIs
 export interface DashboardKPIs {
   totalOwedCents: number;
   lateCustomerCount: number;
-  lowInventoryCount: number;
+  regularStockGrams: number; // Regular available inventory
+  premiumStockGrams: number; // Premium available inventory
   // Daily
   todayCollectedCents: number;
   dailyGoalCents: number;
@@ -118,10 +157,11 @@ export function useDashboardKPIs(): DashboardKPIs {
     // Late customers
     const lateCustomerCount = customers.filter((c) => c.isLate).length;
 
-    // Low inventory (available < 10g or < 5 units)
-    const lowInventoryCount = products.filter(
-      (p) => p.availableGrams < 10 || p.availableUnits < 5
-    ).length;
+    // Stock by quality
+    const regularProducts = products.filter(p => p.quality === 'REGULAR');
+    const premiumProducts = products.filter(p => p.quality === 'PREMIUM');
+    const regularStockGrams = regularProducts.reduce((sum, p) => sum + p.availableGrams, 0);
+    const premiumStockGrams = premiumProducts.reduce((sum, p) => sum + p.availableGrams, 0);
 
     const now = new Date();
 
@@ -181,7 +221,8 @@ export function useDashboardKPIs(): DashboardKPIs {
     return {
       totalOwedCents,
       lateCustomerCount,
-      lowInventoryCount,
+      regularStockGrams,
+      premiumStockGrams,
       todayCollectedCents,
       dailyGoalCents,
       dailyMarginCents,
@@ -195,7 +236,8 @@ export function useDashboardKPIs(): DashboardKPIs {
     kpis ?? {
       totalOwedCents: 0,
       lateCustomerCount: 0,
-      lowInventoryCount: 0,
+      regularStockGrams: 0,
+      premiumStockGrams: 0,
       todayCollectedCents: 0,
       dailyGoalCents: 0,
       dailyMarginCents: 0,

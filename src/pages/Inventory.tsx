@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useProducts, useSettings } from '../hooks/useData';
+import { useProducts, useSettings, useWasteHistory } from '../hooks/useData';
 import { createProduct, adjustInventory } from '../db/products';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
@@ -12,12 +12,14 @@ import type { Quality, SellMode, InventoryAdjustmentType, WeightUnit } from '../
 export function Inventory() {
   const products = useProducts();
   const settings = useSettings();
+  const wasteHistory = useWasteHistory();
 
   const [showNewProduct, setShowNewProduct] = useState(false);
   const [newProductName, setNewProductName] = useState('');
   const [newProductQuality, setNewProductQuality] = useState<Quality>('REGULAR');
   const [newProductPrice, setNewProductPrice] = useState('');
   const [newProductPriceUnit, setNewProductPriceUnit] = useState<WeightUnit>('g');
+  const [newProductStock, setNewProductStock] = useState('');
 
   const [showAdjust, setShowAdjust] = useState(false);
   const [adjustProductId, setAdjustProductId] = useState<string | null>(null);
@@ -36,16 +38,23 @@ export function Inventory() {
     const gramsPerUnit = toGrams(1, newProductPriceUnit);
     const pricePerGram = pricePerUnit / gramsPerUnit;
 
-    await createProduct({
+    const product = await createProduct({
       name: newProductName.trim(),
       quality: newProductQuality,
       sellMode: 'WEIGHT' as SellMode,
       pricePerGramCents: Math.round(pricePerGram * 100),
     });
 
+    // Add initial stock if provided
+    const initialStock = parseFloat(newProductStock) || 0;
+    if (initialStock > 0) {
+      await adjustInventory(product.id, 'RESTOCK', initialStock, 0, 'Initial stock');
+    }
+
     setNewProductName('');
     setNewProductPrice('');
     setNewProductPriceUnit('g');
+    setNewProductStock('');
     setShowNewProduct(false);
   };
 
@@ -85,20 +94,20 @@ export function Inventory() {
   return (
     <div className="p-4 space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-slate-900">Inventory</h1>
+        <h1 className="text-xl font-bold text-text-primary">Inventory</h1>
         <Button onClick={() => setShowNewProduct(true)}>+ Product</Button>
       </div>
 
       {products.length === 0 ? (
         <Card className="text-center py-8">
-          <p className="text-slate-500">No products yet. Add one to get started!</p>
+          <p className="text-silver">No products yet. Add one to get started!</p>
         </Card>
       ) : (
         <>
           {/* Regular products */}
           {regularProducts.length > 0 && (
             <div>
-              <h2 className="text-sm font-medium text-slate-500 uppercase tracking-wider mb-2">
+              <h2 className="text-sm font-medium text-silver uppercase tracking-wider mb-2">
                 Regular
               </h2>
               <div className="space-y-2">
@@ -118,7 +127,7 @@ export function Inventory() {
           {/* Premium products */}
           {premiumProducts.length > 0 && (
             <div>
-              <h2 className="text-sm font-medium text-slate-500 uppercase tracking-wider mb-2">
+              <h2 className="text-sm font-medium text-gold uppercase tracking-wider mb-2">
                 Premium
               </h2>
               <div className="space-y-2">
@@ -132,6 +141,53 @@ export function Inventory() {
                   />
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Waste - aggregated totals */}
+          {wasteHistory.length > 0 && (
+            <div>
+              <h2 className="text-sm font-medium text-silver uppercase tracking-wider mb-2">
+                Waste
+              </h2>
+              <Card>
+                <div className="space-y-2">
+                  {/* Regular waste total */}
+                  {(() => {
+                    const regularTotal = wasteHistory
+                      .filter(r => r.quality === 'REGULAR')
+                      .reduce((sum, r) => sum + r.gramsAdjustment, 0);
+                    if (regularTotal > 0) {
+                      return (
+                        <div className="flex justify-between items-center py-1">
+                          <span className="text-sm font-medium text-text-primary">Regular</span>
+                          <span className="text-magenta font-mono text-sm">
+                            -{formatWeight(regularTotal, unit)}
+                          </span>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
+                  {/* Premium waste total */}
+                  {(() => {
+                    const premiumTotal = wasteHistory
+                      .filter(r => r.quality === 'PREMIUM')
+                      .reduce((sum, r) => sum + r.gramsAdjustment, 0);
+                    if (premiumTotal > 0) {
+                      return (
+                        <div className="flex justify-between items-center py-1">
+                          <span className="text-sm font-medium text-gold">Premium</span>
+                          <span className="text-magenta font-mono text-sm">
+                            -{formatWeight(premiumTotal, unit)}
+                          </span>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
+                </div>
+              </Card>
             </div>
           )}
         </>
@@ -166,8 +222,8 @@ export function Inventory() {
               <button
                 onClick={() => setNewProductQuality('PREMIUM')}
                 className={`flex-1 py-2.5 rounded-xl font-medium transition-all ${newProductQuality === 'PREMIUM'
-                  ? 'bg-lime text-[#050810] font-semibold'
-                  : 'glass-card text-silver hover:text-text-primary'
+                  ? 'bg-gold text-[#050810] font-semibold'
+                  : 'glass-card text-silver hover:text-gold'
                   }`}
               >
                 Premium
@@ -198,6 +254,14 @@ export function Inventory() {
               />
             </div>
           </div>
+          <Input
+            label="Initial Stock (g)"
+            type="text"
+            inputMode="decimal"
+            placeholder="0"
+            value={newProductStock}
+            onChange={(e) => setNewProductStock(e.target.value)}
+          />
           <div className="flex gap-2">
             <Button
               variant="secondary"
@@ -223,11 +287,11 @@ export function Inventory() {
         onClose={() => setShowAdjust(false)}
         title={adjustType === 'RESTOCK' ? 'Restock' : 'Record Waste'}
       >
-        <div className="space-y-4">
+        <div className="space-y-3">
           {adjustProduct && (
-            <div className="text-center py-2 bg-slate-50 rounded-lg">
-              <div className="font-medium">{adjustProduct.name}</div>
-              <div className="text-sm text-slate-500">
+            <div className="text-center py-2 glass-card rounded-xl">
+              <div className="font-medium text-lime text-sm">{adjustProduct.name}</div>
+              <div className="text-xs text-silver">
                 Current: {formatWeight(adjustProduct.inventory.onHandGrams, unit)}
               </div>
             </div>
@@ -243,7 +307,7 @@ export function Inventory() {
           />
           <Input
             label="Note"
-            placeholder="Optional note..."
+            placeholder="Optional..."
             value={adjustNote}
             onChange={(e) => setAdjustNote(e.target.value)}
           />
@@ -256,7 +320,7 @@ export function Inventory() {
               variant={adjustType === 'WASTE' ? 'danger' : 'primary'}
               className="flex-1"
             >
-              {adjustType === 'RESTOCK' ? 'Add Stock' : 'Remove Stock'}
+              {adjustType === 'RESTOCK' ? 'Add' : 'Remove'}
             </Button>
           </div>
         </div>
@@ -274,18 +338,19 @@ interface ProductCardProps {
 
 function ProductCard({ product, unit, onRestock, onWaste }: ProductCardProps) {
   const isLow = product.availableGrams < 10;
+  const isPremium = product.quality === 'PREMIUM';
 
   return (
     <Card>
       <div className="flex items-center justify-between mb-3">
         <div>
-          <h3 className="font-medium text-slate-900">{product.name}</h3>
-          <p className="text-sm text-slate-500">
+          <h3 className={`font-medium ${isPremium ? 'text-gold' : 'text-text-primary'}`}>{product.name}</h3>
+          <p className="text-sm text-silver">
             {formatMoney(product.pricePerGramCents ?? 0)}/g
           </p>
         </div>
         {isLow && (
-          <span className="px-2 py-0.5 text-xs font-medium bg-orange-100 text-orange-700 rounded-full">
+          <span className="px-2 py-0.5 text-xs font-medium bg-gold/20 text-gold rounded-full">
             Low
           </span>
         )}
@@ -293,22 +358,22 @@ function ProductCard({ product, unit, onRestock, onWaste }: ProductCardProps) {
 
       <div className="grid grid-cols-3 gap-2 text-center text-sm mb-3">
         <div>
-          <div className="font-semibold text-slate-900">
+          <div className="font-semibold text-text-primary">
             {formatWeight(product.inventory.onHandGrams, unit)}
           </div>
-          <div className="text-slate-500">On Hand</div>
+          <div className="text-silver">On Hand</div>
         </div>
         <div>
-          <div className="font-semibold text-orange-600">
+          <div className="font-semibold text-gold">
             {formatWeight(product.inventory.reservedGrams, unit)}
           </div>
-          <div className="text-slate-500">Reserved</div>
+          <div className="text-silver">Reserved</div>
         </div>
         <div>
-          <div className={`font-semibold ${isLow ? 'text-red-600' : 'text-green-600'}`}>
+          <div className={`font-semibold ${isLow ? 'text-magenta' : 'text-lime'}`}>
             {formatWeight(product.availableGrams, unit)}
           </div>
-          <div className="text-slate-500">Available</div>
+          <div className="text-silver">Available</div>
         </div>
       </div>
 

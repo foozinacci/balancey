@@ -25,6 +25,7 @@ export function NewOrder() {
   const [customerId, setCustomerId] = useState(preselectedCustomerId ?? '');
   const [quality, setQuality] = useState<Quality>('REGULAR');
   const [productId, setProductId] = useState('');
+  const [useCustomValues, setUseCustomValues] = useState(false);
   const [quantity, setQuantity] = useState('');
   const [unit, setUnit] = useState<WeightUnit>('g');
   const [fulfillmentMethod, setFulfillmentMethod] = useState<FulfillmentMethod>('PICKUP');
@@ -82,7 +83,8 @@ export function NewOrder() {
 
   const deliveryFeeCents = parseMoney(deliveryFee);
   const orderTotalCents = lineTotalCents + deliveryFeeCents;
-  const paymentCents = parseMoney(paymentAmount);
+  // Payment is 0 for Pay Later orders
+  const paymentCents = paymentTiming === 'now' ? parseMoney(paymentAmount) : 0;
   const balanceDueCents = Math.max(0, orderTotalCents - paymentCents);
 
   // Compute policy when relevant inputs change
@@ -172,23 +174,23 @@ export function NewOrder() {
       {/* Back button */}
       <button
         onClick={() => navigate(-1)}
-        className="flex items-center text-slate-600 -ml-1"
+        className="flex items-center text-silver -ml-1"
       >
-        <svg className="w-5 h-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
         </svg>
-        Cancel
+        Back
       </button>
 
-      <h1 className="text-xl font-bold text-slate-900">New Order</h1>
+      <h1 className="text-xl font-bold text-text-primary">New Order</h1>
 
-      {/* Customer select */}
+      {/* Client select */}
       <Select
-        label="Customer"
+        label="Client"
         value={customerId}
         onChange={(e) => setCustomerId(e.target.value)}
         options={[
-          { value: '', label: 'Select customer...' },
+          { value: '', label: 'Select client...' },
           ...customers.map((c) => ({ value: c.id, label: c.name })),
         ]}
       />
@@ -209,8 +211,8 @@ export function NewOrder() {
           <button
             onClick={() => setQuality('PREMIUM')}
             className={`flex-1 py-2.5 rounded-xl font-medium transition-all ${quality === 'PREMIUM'
-              ? 'bg-lime text-[#050810] font-semibold'
-              : 'glass-card text-silver hover:text-text-primary'
+              ? 'bg-gold text-[#050810] font-semibold'
+              : 'glass-card text-silver hover:text-gold'
               }`}
           >
             Premium
@@ -218,26 +220,52 @@ export function NewOrder() {
         </div>
       </div>
 
-      {/* Product select */}
-      {filteredProducts.length > 0 && (
-        <Select
-          label="Product"
-          value={productId}
-          onChange={(e) => setProductId(e.target.value)}
-          options={filteredProducts.map((p) => ({
-            value: p.id,
-            label: `${p.name} (${formatMoney(p.pricePerGramCents ?? 0)}/g)`,
-          }))}
+      {/* Product select with Custom Values option */}
+      <div>
+        <label className="block text-sm font-medium text-silver mb-2">Product</label>
+        {filteredProducts.length > 0 ? (
+          <Select
+            value={useCustomValues ? 'custom' : productId}
+            onChange={(e) => {
+              if (e.target.value === 'custom') {
+                setUseCustomValues(true);
+                setProductId('');
+              } else {
+                setUseCustomValues(false);
+                setProductId(e.target.value);
+              }
+            }}
+            options={[
+              ...filteredProducts.map((p) => ({
+                value: p.id,
+                label: `${p.name} (${formatMoney(p.pricePerGramCents ?? 0)}/g)`,
+              })),
+              { value: 'custom', label: '+ Custom Values' },
+            ]}
+          />
+        ) : (
+          <p className="text-sm text-silver italic">No {quality.toLowerCase()} products in inventory</p>
+        )}
+      </div>
+
+      {/* Custom price input (only if Custom Values selected) */}
+      {useCustomValues && (
+        <Input
+          label="Custom Price per Gram ($)"
+          type="text"
+          inputMode="decimal"
+          placeholder="0.00"
         />
       )}
 
-      {/* Quantity */}
+      {/* Quantity with weight unit and quick selects */}
       <div>
-        <label className="block text-sm font-medium text-slate-700 mb-2">Quantity</label>
+        <label className="block text-sm font-medium text-silver mb-2">Quantity</label>
         <div className="flex gap-2">
           <Input
             type="text"
             inputMode="decimal"
+            placeholder="0"
             value={quantity}
             onChange={(e) => setQuantity(e.target.value)}
             className="flex-1"
@@ -255,22 +283,27 @@ export function NewOrder() {
           />
         </div>
 
-        {/* Preset weights */}
-        <div className="flex flex-wrap gap-2 mt-2">
-          {presetWeights.map((w) => (
-            <button
-              key={w}
-              onClick={() => handlePresetWeight(w)}
-              className="px-3 py-2 text-sm glass-card rounded-xl text-silver hover:text-lime hover:border-lime/50 transition-all"
-            >
-              {w}g
-            </button>
-          ))}
-        </div>
+        {/* Quick selects - only show for grams */}
+        {unit === 'g' && (
+          <div className="flex flex-wrap gap-2 mt-2">
+            {presetWeights.map((w) => (
+              <button
+                key={w}
+                onClick={() => handlePresetWeight(w)}
+                className={`px-3 py-1.5 text-sm rounded-xl transition-all ${quantity === String(w)
+                  ? 'bg-lime text-[#050810] font-semibold'
+                  : 'glass-card text-silver hover:text-lime'
+                  }`}
+              >
+                {w}g
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Conversion display */}
         {quantity && unit !== 'g' && (
-          <p className="text-sm text-slate-500 mt-2">
+          <p className="text-sm text-silver mt-2">
             = {formatWeight(quantityGrams, 'g')}
           </p>
         )}
@@ -388,40 +421,41 @@ export function NewOrder() {
         </div>
       )}
 
-      {/* Notes */}
+      {/* Notes (Optional) */}
       <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">Notes</label>
+        <label className="block text-sm font-medium text-silver mb-1">Notes (Optional)</label>
         <textarea
-          className="w-full px-3 py-2.5 text-base rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-primary-500"
+          className="w-full px-4 py-3 text-base rounded-xl glass-input resize-none"
           rows={2}
+          placeholder="Add any notes..."
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
         />
       </div>
 
-      {/* Policy summary */}
+      {/* Order Summary */}
       {policyInfo && quantityGrams > 0 && (
-        <Card className="bg-slate-50">
-          <h3 className="font-semibold text-slate-900 mb-3">Order Summary</h3>
+        <Card>
+          <h3 className="font-semibold text-text-primary mb-3">Order Summary</h3>
 
           <div className="space-y-2 text-sm">
             {/* Typical info */}
             {policyInfo.typicalGrams && (
               <div className="flex justify-between">
-                <span className="text-slate-500">Typical order:</span>
-                <span>{formatWeight(policyInfo.typicalGrams, 'g')}</span>
+                <span className="text-silver">Typical order:</span>
+                <span className="text-text-primary">{formatWeight(policyInfo.typicalGrams, 'g')}</span>
               </div>
             )}
             {policyInfo.upperNormalGrams && (
               <div className="flex justify-between">
-                <span className="text-slate-500">Upper normal:</span>
-                <span>{formatWeight(policyInfo.upperNormalGrams, 'g')}</span>
+                <span className="text-silver">Upper normal:</span>
+                <span className="text-text-primary">{formatWeight(policyInfo.upperNormalGrams, 'g')}</span>
               </div>
             )}
 
             {/* Over typical warning */}
             {policyInfo.isOverTypical && (
-              <div className="flex items-center gap-2 py-2 px-3 bg-yellow-50 rounded-lg text-yellow-700">
+              <div className="flex items-center gap-2 py-2 px-3 bg-gold/10 rounded-lg text-gold">
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                   <path
                     fillRule="evenodd"
@@ -435,7 +469,7 @@ export function NewOrder() {
 
             {/* Policy tier */}
             <div className="flex justify-between items-center">
-              <span className="text-slate-500">Policy:</span>
+              <span className="text-silver">Policy:</span>
               <span
                 className={`px-2 py-0.5 rounded text-xs font-medium ${policyInfo.tierDisplay.bgColor} ${policyInfo.tierDisplay.color}`}
               >
@@ -443,27 +477,27 @@ export function NewOrder() {
               </span>
             </div>
 
-            <div className="border-t border-slate-200 my-2"></div>
+            <div className="border-t border-surface-600 my-2"></div>
 
             {/* Totals */}
             <div className="flex justify-between">
-              <span className="text-slate-500">Order total:</span>
-              <span className="font-medium">{formatMoney(orderTotalCents)}</span>
+              <span className="text-silver">Order total:</span>
+              <span className="font-medium text-text-primary">{formatMoney(orderTotalCents)}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500">Paid now:</span>
-              <span>{formatMoney(paymentCents)}</span>
+              <span className="text-silver">Paid now:</span>
+              <span className="text-text-primary">{formatMoney(paymentCents)}</span>
             </div>
             <div className="flex justify-between font-medium">
-              <span>Balance due:</span>
-              <span className={balanceDueCents > 0 ? 'text-red-600' : 'text-green-600'}>
+              <span className="text-text-primary">Balance due:</span>
+              <span className={balanceDueCents > 0 ? 'text-magenta' : 'text-lime'}>
                 {formatMoney(balanceDueCents)}
               </span>
             </div>
 
             {/* Deposit warning */}
             {!policyInfo.meetsDepositMin && balanceDueCents > 0 && (
-              <div className="flex items-center gap-2 py-2 px-3 bg-orange-50 rounded-lg text-orange-700">
+              <div className="flex items-center gap-2 py-2 px-3 bg-gold/10 rounded-lg text-gold">
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                   <path
                     fillRule="evenodd"
@@ -475,17 +509,17 @@ export function NewOrder() {
               </div>
             )}
 
-            <div className="border-t border-slate-200 my-2"></div>
+            <div className="border-t border-surface-600 my-2"></div>
 
             {/* Give now / withhold */}
-            <div className="flex justify-between text-green-700">
+            <div className="flex justify-between text-lime">
               <span>Give now:</span>
               <span className="font-medium">
                 {formatWeight(policyInfo.deliverNowGrams, 'g')}
               </span>
             </div>
             {policyInfo.withheldGrams > 0 && (
-              <div className="flex justify-between text-orange-600">
+              <div className="flex justify-between text-gold">
                 <span>Withhold:</span>
                 <span className="font-medium">
                   {formatWeight(policyInfo.withheldGrams, 'g')}

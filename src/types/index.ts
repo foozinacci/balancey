@@ -182,6 +182,7 @@ export interface CustomerWithBalance extends Customer {
   upperNormalGrams?: number;
   lastActivityAt?: number;
   isLate: boolean;
+  orderCount: number; // Number of orders for this client
 }
 
 export interface OrderWithDetails extends Order {

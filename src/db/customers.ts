@@ -137,17 +137,17 @@ export async function getCustomerWithBalance(
   const customer = await getCustomer(customerId);
   if (!customer) return null;
 
-  const [balanceDueCents, tags, typicalStats, lastOrder] = await Promise.all([
+  const [balanceDueCents, tags, typicalStats, orders] = await Promise.all([
     calculateCustomerBalance(customerId),
     getCustomerTags(customerId),
     computeTypicalOrderStats(customerId),
     db.orders
       .where('customerId')
       .equals(customerId)
-      .reverse()
-      .sortBy('createdAt')
-      .then((orders) => orders[0]),
+      .toArray(),
   ]);
+
+  const lastOrder = orders.sort((a, b) => b.createdAt - a.createdAt)[0];
 
   return {
     ...customer,
@@ -157,6 +157,7 @@ export async function getCustomerWithBalance(
     upperNormalGrams: typicalStats?.upperNormal,
     lastActivityAt: lastOrder?.createdAt,
     isLate: tags.some((t) => t.tag === 'LATE'),
+    orderCount: orders.length,
   };
 }
 

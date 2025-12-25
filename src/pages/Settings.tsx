@@ -1,9 +1,10 @@
 import { useState, useRef } from 'react';
 import { useSettings } from '../hooks/useData';
-import { updateSettings } from '../db';
+import { updateSettings, db } from '../db';
 import { downloadBackup, importFromFile } from '../db/backup';
 import { createBalanceCarryover, clearPaidOrders, clearAllData } from '../db/orders';
 import { createCustomer, getAllCustomers } from '../db/customers';
+import { seedDemoData } from '../db/seedDemo';
 import { Card, CardHeader } from '../components/Card';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
@@ -32,8 +33,10 @@ export function Settings() {
   // Clear confirmation modals
   const [showClearPaid, setShowClearPaid] = useState(false);
   const [showClearAll, setShowClearAll] = useState(false);
+  const [showClearWaste, setShowClearWaste] = useState(false);
   const [clearAllConfirmText, setClearAllConfirmText] = useState('');
-
+  const [showSeedDemo, setShowSeedDemo] = useState(false);
+  const [seedStatus, setSeedStatus] = useState<'idle' | 'loading' | 'success'>('idle');
   if (!settings) {
     return <div className="p-4">Loading...</div>;
   }
@@ -118,7 +121,7 @@ export function Settings() {
 
   return (
     <div className="p-4 space-y-4">
-      <h1 className="text-xl font-bold text-slate-900">Settings</h1>
+      <h1 className="text-xl font-bold text-text-primary">Settings</h1>
 
       {/* Monthly Goal - FIRST */}
       <Card>
@@ -263,55 +266,17 @@ export function Settings() {
                   updateSettings({ premiumSalePct: parseInt(e.target.value) })
                 }
               />
-              <p className="text-xs text-slate-400 mt-1">Extra % to charge customers</p>
+              <p className="text-xs text-slate-400 mt-1">Extra % to charge clients</p>
             </div>
           </div>
         </div>
       </Card>
 
       {/* Preset weights */}
-      <Card>
-        <CardHeader
-          title="Preset Weights"
-          action={
-            !editingPresets && (
-              <Button variant="ghost" size="sm" onClick={startEditingPresets}>
-                Edit
-              </Button>
-            )
-          }
-        />
-        {editingPresets ? (
-          <div className="space-y-3">
-            <Input
-              placeholder="1, 2, 3.5, 7, 14, 28"
-              value={presetsInput}
-              onChange={(e) => setPresetsInput(e.target.value)}
-            />
-            <div className="flex gap-2">
-              <Button variant="secondary" onClick={() => setEditingPresets(false)} className="flex-1">
-                Cancel
-              </Button>
-              <Button onClick={handleUpdatePresets} className="flex-1">
-                Save
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <div className="flex flex-wrap gap-2">
-            {settings.presetWeights.map((w) => (
-              <span key={w} className="px-3 py-1.5 bg-slate-100 rounded-lg text-sm">
-                {w}g
-              </span>
-            ))}
-          </div>
-        )}
-      </Card>
-
       {/* Display settings */}
       <Card>
         <CardHeader title="Display" />
-        <div className="space-y-3">
+        <div className="space-y-4">
           <Select
             label="Default Weight Unit"
             value={settings.defaultWeightUnit}
@@ -323,6 +288,44 @@ export function Settings() {
               { value: 'kg', label: 'Kilograms (kg)' },
             ]}
           />
+
+          {/* Preset Weights */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-sm font-medium text-silver-light">Preset Weights</label>
+              {!editingPresets && (
+                <Button variant="ghost" size="sm" onClick={startEditingPresets}>
+                  Edit
+                </Button>
+              )}
+            </div>
+            {editingPresets ? (
+              <div className="space-y-3">
+                <Input
+                  placeholder="1, 2, 3.5, 7, 14, 28"
+                  value={presetsInput}
+                  onChange={(e) => setPresetsInput(e.target.value)}
+                />
+                <div className="flex gap-2">
+                  <Button variant="secondary" onClick={() => setEditingPresets(false)} className="flex-1">
+                    Cancel
+                  </Button>
+                  <Button onClick={handleUpdatePresets} className="flex-1">
+                    Save
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {settings.presetWeights.map((w) => (
+                  <span key={w} className="px-3 py-1.5 glass-card rounded-xl text-sm text-text-primary">
+                    {w}g
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
           <Select
             label="Timezone"
             value={settings.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone}
@@ -373,8 +376,8 @@ export function Settings() {
           >
             Quick Add Debts
           </Button>
-          <div className="border-t border-slate-200 pt-3 mt-3">
-            <p className="text-sm text-slate-500 mb-2">Quick Actions</p>
+          <div className="border-t border-surface-600 pt-3 mt-3">
+            <p className="text-sm text-silver mb-2">Quick Actions</p>
             <div className="grid grid-cols-2 gap-2">
               <Button
                 variant="secondary"
@@ -383,10 +386,22 @@ export function Settings() {
                 Clear Paid
               </Button>
               <Button
+                variant="secondary"
+                onClick={() => setShowClearWaste(true)}
+              >
+                Clear Waste
+              </Button>
+              <Button
                 variant="danger"
                 onClick={() => setShowClearAll(true)}
               >
                 Clear All
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() => setShowSeedDemo(true)}
+              >
+                🌱 Demo Data
               </Button>
             </div>
           </div>
@@ -436,6 +451,51 @@ export function Settings() {
         </div>
       </Modal>
 
+      {/* Clear Waste Confirmation Modal */}
+      <Modal
+        isOpen={showClearWaste}
+        onClose={() => setShowClearWaste(false)}
+        title="Clear Waste History"
+      >
+        <div className="space-y-4">
+          <p className="text-silver">
+            This will clear all waste records from inventory history.
+          </p>
+          <p className="text-sm text-silver/70">
+            Your current stock levels will not be affected.
+          </p>
+          <div className="flex gap-3">
+            <Button
+              variant="secondary"
+              onClick={() => setShowClearWaste(false)}
+              className="flex-1"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={async () => {
+                try {
+                  // Clear only WASTE type adjustments
+                  const wasteRecords = await db.inventoryAdjustments
+                    .filter(a => a.type === 'WASTE')
+                    .toArray();
+                  const ids = wasteRecords.map(r => r.id);
+                  await db.inventoryAdjustments.bulkDelete(ids);
+                  setShowClearWaste(false);
+                  window.location.reload();
+                } catch (error) {
+                  console.error('Failed to clear waste:', error);
+                }
+              }}
+              className="flex-1"
+            >
+              Clear Waste
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
       {/* Clear All Confirmation Modal */}
       <Modal
         isOpen={showClearAll}
@@ -447,7 +507,7 @@ export function Settings() {
       >
         <div className="space-y-4">
           <p className="text-silver">
-            This will permanently delete ALL customers, orders, inventory, and history.
+            This will permanently delete ALL clients, orders, inventory, and history.
           </p>
           <p className="text-sm text-magenta font-semibold">
             This action CANNOT be undone!
@@ -494,6 +554,66 @@ export function Settings() {
         </div>
       </Modal>
 
+      {/* Seed Demo Modal */}
+      <Modal
+        isOpen={showSeedDemo}
+        onClose={() => setShowSeedDemo(false)}
+        title="🌱 Load Demo Data"
+      >
+        <div className="space-y-4">
+          {seedStatus === 'success' ? (
+            <div className="text-center py-4">
+              <p className="text-lime text-lg font-semibold">✅ Demo data loaded!</p>
+              <p className="text-silver text-sm mt-2">20 clients, 22 orders, $3,000 goal</p>
+            </div>
+          ) : (
+            <>
+              <p className="text-silver">
+                This will clear existing data and load demo orders for January 2025.
+              </p>
+              <ul className="text-sm text-silver space-y-1">
+                <li>• 15 Premium clients ($20/g)</li>
+                <li>• 5 Regular clients ($10/g)</li>
+                <li>• 22 total orders</li>
+                <li>• $4,575 billed, $1,805 paid, $2,770 owed</li>
+                <li>• Monthly goal: $3,000</li>
+              </ul>
+            </>
+          )}
+          <div className="flex gap-3">
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setShowSeedDemo(false);
+                setSeedStatus('idle');
+              }}
+              className="flex-1"
+            >
+              {seedStatus === 'success' ? 'Close' : 'Cancel'}
+            </Button>
+            {seedStatus !== 'success' && (
+              <Button
+                onClick={async () => {
+                  setSeedStatus('loading');
+                  try {
+                    await seedDemoData();
+                    setSeedStatus('success');
+                    setTimeout(() => window.location.reload(), 1500);
+                  } catch (error) {
+                    console.error('Failed to seed demo:', error);
+                    setSeedStatus('idle');
+                  }
+                }}
+                disabled={seedStatus === 'loading'}
+                className="flex-1"
+              >
+                {seedStatus === 'loading' ? 'Loading...' : 'Load Demo'}
+              </Button>
+            )}
+          </div>
+        </div>
+      </Modal>
+
       {/* Quick add modal */}
       <Modal
         isOpen={showQuickAdd}
@@ -502,10 +622,10 @@ export function Settings() {
       >
         <div className="space-y-4">
           <p className="text-sm text-slate-600">
-            Quickly add a customer with a starting balance (for migrating from notepad).
+            Quickly add a client with a starting balance (for migrating from notepad).
           </p>
           <Input
-            label="Customer Name"
+            label="Client Name"
             value={quickAddName}
             onChange={(e) => setQuickAddName(e.target.value)}
             autoFocus

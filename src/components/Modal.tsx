@@ -25,20 +25,20 @@ export function Modal({ isOpen, onClose, title, children }: ModalProps) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-end justify-center p-4 pb-20">
       {/* Backdrop with blur */}
       <div
         className="absolute inset-0 bg-surface-900/80 backdrop-blur-sm"
         onClick={onClose}
       />
 
-      {/* Modal content */}
-      <div className="glass-card relative w-full max-w-md p-6 animate-fade-in-up border-lime/20">
+      {/* Modal content - mobile optimized */}
+      <div className="glass-card relative w-full max-w-sm p-4 animate-fade-in-up border-lime/20">
         {/* Glow accent */}
         <div className="absolute -inset-px bg-gradient-to-r from-lime/20 via-transparent to-magenta/20 rounded-2xl -z-10 blur-sm" />
 
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-bold text-text-primary">{title}</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold text-text-primary">{title}</h2>
           <button
             onClick={() => {
               audio.playClick();
@@ -46,7 +46,7 @@ export function Modal({ isOpen, onClose, title, children }: ModalProps) {
             }}
             className="text-silver hover:text-silver-light transition-colors p-1"
           >
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
