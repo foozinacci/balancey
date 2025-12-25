@@ -33,10 +33,7 @@ export function Modal({ isOpen, onClose, title, children }: ModalProps) {
       />
 
       {/* Modal content - mobile optimized */}
-      <div className="glass-card relative w-full max-w-sm p-4 animate-fade-in-up border-lime/20">
-        {/* Glow accent */}
-        <div className="absolute -inset-px bg-gradient-to-r from-lime/20 via-transparent to-magenta/20 rounded-2xl -z-10 blur-sm" />
-
+      <div className="glass-card relative w-full max-w-sm p-4 animate-fade-in-up border-lime/20 z-10">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-bold text-text-primary">{title}</h2>
           <button
@@ -51,7 +48,9 @@ export function Modal({ isOpen, onClose, title, children }: ModalProps) {
             </svg>
           </button>
         </div>
-        {children}
+        <div className="relative z-10">
+          {children}
+        </div>
       </div>
     </div>
   );
