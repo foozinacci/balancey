@@ -124,6 +124,10 @@ export interface OrderPolicy {
 // Settings
 export interface Settings {
   id: string;
+  // Monthly goal tracking
+  monthlyGoalCents?: number;
+  monthlyClearedCents?: number; // Accumulated total from cleared paid orders
+  currentMonthStart?: number; // Timestamp of current month start
   // Policy defaults
   depositMinPctNormal: number;
   holdbackPctNormal: number;
@@ -131,6 +135,9 @@ export interface Settings {
   holdbackPctOverTypical: number;
   depositMinPctLate: number;
   holdbackPctLate: number;
+  // Premium pricing
+  premiumCostPct?: number; // % extra that premium costs you (your cost)
+  premiumSalePct?: number; // % extra to charge customers for premium
   // Behavior
   doNotAdvanceBlocksOrder: boolean;
   maxAdvanceGrams?: number;
@@ -140,11 +147,14 @@ export interface Settings {
   // Display
   defaultWeightUnit: WeightUnit;
   gramsDecimalPlaces: number;
+  timezone?: string; // IANA timezone, e.g. "America/New_York"
   // Due date
   defaultDueDays: number;
   // Typical order
   typicalOrderHistoryCount: number;
   typicalOrderIncludePartial: boolean;
+  // Legacy (deprecated)
+  dailyGoalCents?: number;
 }
 
 // Backup format

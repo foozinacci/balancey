@@ -30,8 +30,10 @@ export function NewOrder() {
   const [fulfillmentMethod, setFulfillmentMethod] = useState<FulfillmentMethod>('PICKUP');
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [deliveryFee, setDeliveryFee] = useState('');
+  const [paymentTiming, setPaymentTiming] = useState<'now' | 'later'>('later');
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CASH');
+  const [dueDate, setDueDate] = useState('');
   const [notes, setNotes] = useState('');
 
   // Policy state
@@ -132,6 +134,16 @@ export function NewOrder() {
 
   const handleSubmit = async () => {
     if (!customerId || !productId || quantityGrams <= 0) return;
+    if (paymentTiming === 'later' && !dueDate) return;
+
+    // Calculate due date
+    let orderDueAt: number | undefined;
+    if (paymentTiming === 'later' && dueDate) {
+      orderDueAt = new Date(dueDate + 'T23:59:59').getTime();
+    }
+
+    // Payment only for Pay Now
+    const actualPaymentCents = paymentTiming === 'now' ? paymentCents : 0;
 
     const input: CreateOrderInput = {
       customerId,
@@ -145,9 +157,10 @@ export function NewOrder() {
       fulfillmentMethod,
       deliveryAddress: fulfillmentMethod === 'DELIVERY' ? deliveryAddress : undefined,
       deliveryFeeCents: fulfillmentMethod === 'DELIVERY' ? deliveryFeeCents : 0,
-      initialPaymentCents: paymentCents > 0 ? paymentCents : undefined,
-      paymentMethod: paymentCents > 0 ? paymentMethod : undefined,
+      initialPaymentCents: actualPaymentCents > 0 ? actualPaymentCents : undefined,
+      paymentMethod: actualPaymentCents > 0 ? paymentMethod : undefined,
       notes: notes.trim() || undefined,
+      dueAt: orderDueAt,
     };
 
     const order = await createOrder(input);
@@ -182,25 +195,23 @@ export function NewOrder() {
 
       {/* Quality toggle */}
       <div>
-        <label className="block text-sm font-medium text-slate-700 mb-2">Quality</label>
+        <label className="block text-sm font-medium text-silver mb-2">Quality</label>
         <div className="flex gap-2">
           <button
             onClick={() => setQuality('REGULAR')}
-            className={`flex-1 py-2.5 rounded-lg font-medium transition-colors ${
-              quality === 'REGULAR'
-                ? 'bg-primary-600 text-white'
-                : 'bg-slate-100 text-slate-700'
-            }`}
+            className={`flex-1 py-2.5 rounded-xl font-medium transition-all ${quality === 'REGULAR'
+              ? 'bg-lime text-[#050810] font-semibold'
+              : 'glass-card text-silver hover:text-text-primary'
+              }`}
           >
             Regular
           </button>
           <button
             onClick={() => setQuality('PREMIUM')}
-            className={`flex-1 py-2.5 rounded-lg font-medium transition-colors ${
-              quality === 'PREMIUM'
-                ? 'bg-primary-600 text-white'
-                : 'bg-slate-100 text-slate-700'
-            }`}
+            className={`flex-1 py-2.5 rounded-xl font-medium transition-all ${quality === 'PREMIUM'
+              ? 'bg-lime text-[#050810] font-semibold'
+              : 'glass-card text-silver hover:text-text-primary'
+              }`}
           >
             Premium
           </button>
@@ -250,7 +261,7 @@ export function NewOrder() {
             <button
               key={w}
               onClick={() => handlePresetWeight(w)}
-              className="px-3 py-1.5 text-sm bg-slate-100 rounded-lg hover:bg-slate-200"
+              className="px-3 py-2 text-sm glass-card rounded-xl text-silver hover:text-lime hover:border-lime/50 transition-all"
             >
               {w}g
             </button>
@@ -267,25 +278,23 @@ export function NewOrder() {
 
       {/* Fulfillment method */}
       <div>
-        <label className="block text-sm font-medium text-slate-700 mb-2">Fulfillment</label>
+        <label className="block text-sm font-medium text-silver mb-2">Fulfillment</label>
         <div className="flex gap-2">
           <button
             onClick={() => setFulfillmentMethod('PICKUP')}
-            className={`flex-1 py-2.5 rounded-lg font-medium transition-colors ${
-              fulfillmentMethod === 'PICKUP'
-                ? 'bg-primary-600 text-white'
-                : 'bg-slate-100 text-slate-700'
-            }`}
+            className={`flex-1 py-2.5 rounded-xl font-medium transition-all ${fulfillmentMethod === 'PICKUP'
+              ? 'bg-lime text-[#050810] font-semibold'
+              : 'glass-card text-silver hover:text-text-primary'
+              }`}
           >
             Pickup
           </button>
           <button
             onClick={() => setFulfillmentMethod('DELIVERY')}
-            className={`flex-1 py-2.5 rounded-lg font-medium transition-colors ${
-              fulfillmentMethod === 'DELIVERY'
-                ? 'bg-primary-600 text-white'
-                : 'bg-slate-100 text-slate-700'
-            }`}
+            className={`flex-1 py-2.5 rounded-xl font-medium transition-all ${fulfillmentMethod === 'DELIVERY'
+              ? 'bg-lime text-[#050810] font-semibold'
+              : 'glass-card text-silver hover:text-text-primary'
+              }`}
           >
             Delivery
           </button>
@@ -311,29 +320,73 @@ export function NewOrder() {
         </div>
       )}
 
-      {/* Payment */}
-      <div className="space-y-3">
-        <Input
-          label="Payment Now"
-          type="text"
-          inputMode="decimal"
-          placeholder="$0.00"
-          value={paymentAmount}
-          onChange={(e) => setPaymentAmount(e.target.value)}
-        />
-        {paymentCents > 0 && (
-          <Select
-            label="Payment Method"
-            value={paymentMethod}
-            onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
-            options={[
-              { value: 'CASH', label: 'Cash' },
-              { value: 'CARD', label: 'Card' },
-              { value: 'OTHER', label: 'Other' },
-            ]}
-          />
-        )}
+      {/* Payment Timing */}
+      <div>
+        <label className="block text-sm font-medium text-silver mb-2">Payment</label>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setPaymentTiming('now')}
+            className={`flex-1 py-2.5 rounded-xl font-medium transition-all ${paymentTiming === 'now'
+              ? 'bg-lime text-[#050810] font-semibold'
+              : 'glass-card text-silver hover:text-text-primary'
+              }`}
+          >
+            Pay Now
+          </button>
+          <button
+            onClick={() => setPaymentTiming('later')}
+            className={`flex-1 py-2.5 rounded-xl font-medium transition-all ${paymentTiming === 'later'
+              ? 'bg-lime text-[#050810] font-semibold'
+              : 'glass-card text-silver hover:text-text-primary'
+              }`}
+          >
+            Pay Later
+          </button>
+        </div>
       </div>
+
+      {/* Pay Now - Payment Amount */}
+      {paymentTiming === 'now' && (
+        <div className="space-y-3">
+          <Input
+            label="Payment Amount"
+            type="text"
+            inputMode="decimal"
+            placeholder="$0.00"
+            value={paymentAmount}
+            onChange={(e) => setPaymentAmount(e.target.value)}
+          />
+          {paymentCents > 0 && (
+            <Select
+              label="Payment Method"
+              value={paymentMethod}
+              onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
+              options={[
+                { value: 'CASH', label: 'Cash' },
+                { value: 'CARD', label: 'Card' },
+                { value: 'OTHER', label: 'Other' },
+              ]}
+            />
+          )}
+        </div>
+      )}
+
+      {/* Pay Later - Due Date */}
+      {paymentTiming === 'later' && (
+        <div>
+          <label className="block text-sm font-medium text-silver mb-1">Due Date *</label>
+          <input
+            type="date"
+            value={dueDate}
+            onChange={(e) => setDueDate(e.target.value)}
+            className="w-full px-4 py-3 rounded-xl glass-card border border-surface-600 text-text-primary bg-transparent focus:outline-none focus:ring-2 focus:ring-lime/50"
+            required
+          />
+          {!dueDate && (
+            <p className="text-xs text-magenta mt-1">Due date is required for Pay Later orders</p>
+          )}
+        </div>
+      )}
 
       {/* Notes */}
       <div>
@@ -443,11 +496,11 @@ export function NewOrder() {
         </Card>
       )}
 
-      {/* Submit button - fixed at bottom */}
-      <div className="fixed bottom-20 left-0 right-0 p-4 bg-white border-t border-slate-200">
+      {/* Submit button */}
+      <div className="pb-4">
         <Button
           onClick={handleSubmit}
-          disabled={!customerId || !productId || quantityGrams <= 0}
+          disabled={!customerId || !productId || quantityGrams <= 0 || (paymentTiming === 'later' && !dueDate)}
           className="w-full"
           size="lg"
         >

@@ -2,7 +2,7 @@ import { useState, useRef } from 'react';
 import { useSettings } from '../hooks/useData';
 import { updateSettings } from '../db';
 import { downloadBackup, importFromFile } from '../db/backup';
-import { createBalanceCarryover } from '../db/orders';
+import { createBalanceCarryover, clearPaidOrders, clearAllData } from '../db/orders';
 import { createCustomer, getAllCustomers } from '../db/customers';
 import { Card, CardHeader } from '../components/Card';
 import { Button } from '../components/Button';
@@ -28,6 +28,11 @@ export function Settings() {
 
   const [editingPresets, setEditingPresets] = useState(false);
   const [presetsInput, setPresetsInput] = useState('');
+
+  // Clear confirmation modals
+  const [showClearPaid, setShowClearPaid] = useState(false);
+  const [showClearAll, setShowClearAll] = useState(false);
+  const [clearAllConfirmText, setClearAllConfirmText] = useState('');
 
   if (!settings) {
     return <div className="p-4">Loading...</div>;
@@ -114,6 +119,34 @@ export function Settings() {
   return (
     <div className="p-4 space-y-4">
       <h1 className="text-xl font-bold text-slate-900">Settings</h1>
+
+      {/* Monthly Goal - FIRST */}
+      <Card>
+        <CardHeader title="Monthly Goal" />
+        <div className="space-y-3">
+          <div>
+            <label className="block text-sm text-silver mb-1">Target Revenue ($)</label>
+            <Input
+              type="text"
+              inputMode="decimal"
+              placeholder="$0.00"
+              value={settings.monthlyGoalCents ? (settings.monthlyGoalCents / 100).toFixed(2) : ''}
+              onChange={(e) => {
+                const cents = parseMoney(e.target.value);
+                updateSettings({ monthlyGoalCents: cents });
+              }}
+            />
+            <p className="text-xs text-silver/70 mt-1">
+              Your target monthly revenue. The Monthly Margin on the dashboard shows how you're tracking against this goal.
+            </p>
+          </div>
+          {settings.monthlyClearedCents && settings.monthlyClearedCents > 0 && (
+            <div className="text-sm text-silver/70">
+              Includes ${(settings.monthlyClearedCents / 100).toFixed(2)} from cleared orders
+            </div>
+          )}
+        </div>
+      </Card>
 
       {/* Policy settings */}
       <Card>
@@ -203,6 +236,36 @@ export function Settings() {
               />
             </div>
           </div>
+
+          <h4 className="font-medium text-slate-700">Premium Pricing</h4>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm text-slate-500 mb-1">Your Cost Markup %</label>
+              <Input
+                type="number"
+                min="0"
+                max="200"
+                value={settings.premiumCostPct ?? 20}
+                onChange={(e) =>
+                  updateSettings({ premiumCostPct: parseInt(e.target.value) })
+                }
+              />
+              <p className="text-xs text-slate-400 mt-1">Extra % you pay for premium</p>
+            </div>
+            <div>
+              <label className="block text-sm text-slate-500 mb-1">Sale Markup %</label>
+              <Input
+                type="number"
+                min="0"
+                max="200"
+                value={settings.premiumSalePct ?? 30}
+                onChange={(e) =>
+                  updateSettings({ premiumSalePct: parseInt(e.target.value) })
+                }
+              />
+              <p className="text-xs text-slate-400 mt-1">Extra % to charge customers</p>
+            </div>
+          </div>
         </div>
       </Card>
 
@@ -260,6 +323,21 @@ export function Settings() {
               { value: 'kg', label: 'Kilograms (kg)' },
             ]}
           />
+          <Select
+            label="Timezone"
+            value={settings.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone}
+            onChange={(e) => updateSettings({ timezone: e.target.value })}
+            options={[
+              { value: 'America/New_York', label: 'Eastern (ET)' },
+              { value: 'America/Chicago', label: 'Central (CT)' },
+              { value: 'America/Denver', label: 'Mountain (MT)' },
+              { value: 'America/Los_Angeles', label: 'Pacific (PT)' },
+              { value: 'America/Anchorage', label: 'Alaska (AKT)' },
+              { value: 'Pacific/Honolulu', label: 'Hawaii (HST)' },
+              { value: 'America/Phoenix', label: 'Arizona (MST)' },
+              { value: 'UTC', label: 'UTC' },
+            ]}
+          />
           <div>
             <label className="block text-sm text-slate-500 mb-1">Default Due Days</label>
             <Input
@@ -269,6 +347,7 @@ export function Settings() {
               value={settings.defaultDueDays}
               onChange={(e) => updateSettings({ defaultDueDays: parseInt(e.target.value) })}
             />
+            <p className="text-xs text-silver/70 mt-1">Orders will be due this many days after creation</p>
           </div>
         </div>
       </Card>
@@ -294,8 +373,126 @@ export function Settings() {
           >
             Quick Add Debts
           </Button>
+          <div className="border-t border-slate-200 pt-3 mt-3">
+            <p className="text-sm text-slate-500 mb-2">Quick Actions</p>
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                variant="secondary"
+                onClick={() => setShowClearPaid(true)}
+              >
+                Clear Paid
+              </Button>
+              <Button
+                variant="danger"
+                onClick={() => setShowClearAll(true)}
+              >
+                Clear All
+              </Button>
+            </div>
+          </div>
         </div>
       </Card>
+
+      {/* Clear Paid Confirmation Modal */}
+      <Modal
+        isOpen={showClearPaid}
+        onClose={() => setShowClearPaid(false)}
+        title="Clear Paid Orders"
+      >
+        <div className="space-y-4">
+          <p className="text-silver">
+            This will remove all CLOSED/PAID orders and their payment history.
+          </p>
+          <p className="text-sm text-magenta">
+            This action cannot be undone.
+          </p>
+          <div className="flex gap-3">
+            <Button
+              variant="secondary"
+              onClick={() => setShowClearPaid(false)}
+              className="flex-1"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={async () => {
+                try {
+                  const count = await clearPaidOrders();
+                  setShowClearPaid(false);
+                  // Show success briefly then close
+                  setTimeout(() => {
+                    window.location.reload();
+                  }, 500);
+                  console.log(`Cleared ${count} paid orders`);
+                } catch (error) {
+                  console.error('Failed to clear paid orders:', error);
+                }
+              }}
+              className="flex-1"
+            >
+              Clear Paid
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Clear All Confirmation Modal */}
+      <Modal
+        isOpen={showClearAll}
+        onClose={() => {
+          setShowClearAll(false);
+          setClearAllConfirmText('');
+        }}
+        title="⚠️ Delete All Data"
+      >
+        <div className="space-y-4">
+          <p className="text-silver">
+            This will permanently delete ALL customers, orders, inventory, and history.
+          </p>
+          <p className="text-sm text-magenta font-semibold">
+            This action CANNOT be undone!
+          </p>
+          <div>
+            <label className="block text-sm text-silver mb-1">Type DELETE to confirm:</label>
+            <Input
+              value={clearAllConfirmText}
+              onChange={(e) => setClearAllConfirmText(e.target.value)}
+              placeholder="DELETE"
+            />
+          </div>
+          <div className="flex gap-3">
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setShowClearAll(false);
+                setClearAllConfirmText('');
+              }}
+              className="flex-1"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              disabled={clearAllConfirmText !== 'DELETE'}
+              onClick={async () => {
+                if (clearAllConfirmText === 'DELETE') {
+                  try {
+                    await clearAllData();
+                    setShowClearAll(false);
+                    setClearAllConfirmText('');
+                    window.location.reload();
+                  } catch (error) {
+                    console.error('Failed to clear all data:', error);
+                  }
+                }
+              }}
+              className="flex-1"
+            >
+              Delete Everything
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Quick add modal */}
       <Modal
@@ -333,8 +530,8 @@ export function Settings() {
               {quickAddStatus === 'loading'
                 ? 'Adding...'
                 : quickAddStatus === 'success'
-                ? 'Added!'
-                : 'Add'}
+                  ? 'Added!'
+                  : 'Add'}
             </Button>
           </div>
         </div>
@@ -381,8 +578,8 @@ export function Settings() {
               {importStatus === 'loading'
                 ? 'Importing...'
                 : importStatus === 'success'
-                ? 'Done!'
-                : 'Import'}
+                  ? 'Done!'
+                  : 'Import'}
             </Button>
           </div>
         </div>

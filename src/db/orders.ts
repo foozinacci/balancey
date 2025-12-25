@@ -33,6 +33,7 @@ export interface CreateOrderInput {
   initialPaymentCents?: number;
   paymentMethod?: PaymentMethod;
   notes?: string;
+  dueAt?: number; // Custom due date timestamp
 }
 
 export async function createOrder(input: CreateOrderInput): Promise<Order> {
@@ -78,7 +79,7 @@ export async function createOrder(input: CreateOrderInput): Promise<Order> {
     fulfillmentMethod: input.fulfillmentMethod,
     deliveryAddress: input.deliveryAddress,
     deliveryFeeCents: input.deliveryFeeCents ?? 0,
-    dueAt: balanceDue > 0 ? getDefaultDueDate(settings.defaultDueDays) : undefined,
+    dueAt: balanceDue > 0 ? (input.dueAt ?? getDefaultDueDate(settings.defaultDueDays)) : undefined,
     notes: input.notes,
   };
 
@@ -117,6 +118,11 @@ export async function createOrder(input: CreateOrderInput): Promise<Order> {
   await saveOrderPolicy(order.id, input.customerId, orderItems, paidNow, settings);
 
   return order;
+}
+
+// Update order due date
+export async function updateOrderDueDate(orderId: string, dueAt: number | undefined): Promise<void> {
+  await db.orders.update(orderId, { dueAt });
 }
 
 // Save order policy snapshot
@@ -298,6 +304,32 @@ export async function cancelOrder(orderId: string): Promise<void> {
   await db.orders.update(orderId, { status: 'CANCELLED' });
 }
 
+// Manually close an order (mark as paid/complete)
+export async function closeOrder(orderId: string): Promise<void> {
+  const order = await db.orders.get(orderId);
+  if (!order) return;
+
+  // Release any remaining reserved inventory
+  const items = await db.orderItems.where('orderId').equals(orderId).toArray();
+  const fulfillments = await db.fulfillments.where('orderId').equals(orderId).toArray();
+
+  const deliveredGrams = fulfillments.reduce((sum, f) => sum + (f.deliveredGrams ?? 0), 0);
+  const deliveredUnits = fulfillments.reduce((sum, f) => sum + (f.deliveredUnits ?? 0), 0);
+
+  for (const item of items) {
+    const itemGrams = item.quantityGrams ?? 0;
+    const itemUnits = item.quantityUnits ?? 0;
+    const undeliveredGrams = Math.max(0, itemGrams - deliveredGrams);
+    const undeliveredUnits = Math.max(0, itemUnits - deliveredUnits);
+
+    if (undeliveredGrams > 0 || undeliveredUnits > 0) {
+      await releaseReservedInventory(item.productId, undeliveredGrams, undeliveredUnits);
+    }
+  }
+
+  await db.orders.update(orderId, { status: 'CLOSED' });
+}
+
 // Get order with full details
 export async function getOrderWithDetails(
   orderId: string
@@ -410,4 +442,63 @@ export async function createBalanceCarryover(
   await db.orderItems.add(item);
 
   return order;
+}
+
+// Clear all paid/closed orders and their data
+export async function clearPaidOrders(): Promise<number> {
+  const closedOrders = await db.orders
+    .filter((o) => o.status === 'CLOSED')
+    .toArray();
+
+  const orderIds = closedOrders.map(o => o.id);
+
+  if (orderIds.length === 0) {
+    return 0;
+  }
+
+  // Calculate total payments being cleared (to preserve in monthly goal)
+  let totalClearedPayments = 0;
+
+  // Get all related records and calculate totals
+  for (const orderId of orderIds) {
+    const items = await db.orderItems.where('orderId').equals(orderId).toArray();
+    const payments = await db.payments.where('orderId').equals(orderId).toArray();
+    const fulfillments = await db.fulfillments.where('orderId').equals(orderId).toArray();
+
+    // Sum up payments being cleared
+    totalClearedPayments += payments.reduce((sum, p) => sum + p.amountCents, 0);
+
+    // Delete related records
+    await db.orderItems.bulkDelete(items.map(i => i.id));
+    await db.payments.bulkDelete(payments.map(p => p.id));
+    await db.fulfillments.bulkDelete(fulfillments.map(f => f.id));
+    await db.orderPolicies.delete(orderId);
+  }
+
+  // Add cleared payments to settings so monthly goal isn't affected
+  const settings = await getSettings();
+  const currentCleared = settings.monthlyClearedCents ?? 0;
+  await db.settings.update('default', {
+    monthlyClearedCents: currentCleared + totalClearedPayments
+  });
+
+  // Delete the orders
+  await db.orders.bulkDelete(orderIds);
+
+  return orderIds.length;
+}
+
+// Clear all data (full reset)
+export async function clearAllData(): Promise<void> {
+  await db.orders.clear();
+  await db.orderItems.clear();
+  await db.payments.clear();
+  await db.fulfillments.clear();
+  await db.orderPolicies.clear();
+  await db.customers.clear();
+  await db.customerTags.clear();
+  await db.products.clear();
+  await db.inventory.clear();
+  await db.inventoryAdjustments.clear();
+  // Keep settings
 }

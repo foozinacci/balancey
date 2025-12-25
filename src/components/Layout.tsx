@@ -1,14 +1,52 @@
 import { Link, useLocation } from 'react-router-dom';
-import type { ReactNode } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import { ThreeBackground } from './ThreeBackground';
+import { Modal } from './Modal';
+import { Button } from './Button';
 import { audio } from '../utils/audio';
+import { useMonthlySessionCheck } from '../hooks/useMonthlySession';
+import { useSettings } from '../hooks/useData';
 
 interface LayoutProps {
   children: ReactNode;
 }
 
+function LiveClock() {
+  const settings = useSettings();
+  const [time, setTime] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const timezone = settings?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+  const timeStr = time.toLocaleTimeString('en-US', {
+    timeZone: timezone,
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  });
+
+  const dateStr = time.toLocaleDateString('en-US', {
+    timeZone: timezone,
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric'
+  });
+
+  return (
+    <div className="text-center">
+      <div className="text-lg font-mono text-lime text-glow-lime">{timeStr}</div>
+      <div className="text-xs text-silver">{dateStr}</div>
+    </div>
+  );
+}
+
 export function Layout({ children }: LayoutProps) {
   const location = useLocation();
+  const { showPrompt, handleStartNewSession, handleContinueSession } = useMonthlySessionCheck();
 
   const navItems = [
     { path: '/', label: 'Home', icon: HomeIcon },
@@ -26,7 +64,8 @@ export function Layout({ children }: LayoutProps) {
       <ThreeBackground />
 
       {/* Header */}
-      <header className="glass-card rounded-none border-x-0 border-t-0 px-4 py-1 flex items-center justify-center sticky top-0 z-10">
+      <header className="glass-card rounded-none border-x-0 border-t-0 px-4 py-1 flex items-center justify-between sticky top-0 z-10">
+        <div className="w-24" /> {/* Spacer */}
         <Link
           to="/"
           onClick={handleNavClick}
@@ -35,10 +74,13 @@ export function Layout({ children }: LayoutProps) {
           <img
             src="https://i.ibb.co/cSgYrmf9/ei-1766675949085-removebg-preview.png"
             alt="Balancey"
-            className="h-24 w-auto"
+            className="h-20 w-auto"
             style={{ filter: 'drop-shadow(0 0 15px rgba(127, 255, 0, 0.4))' }}
           />
         </Link>
+        <div className="w-24">
+          <LiveClock />
+        </div>
       </header>
 
       {/* Main content */}
@@ -67,6 +109,37 @@ export function Layout({ children }: LayoutProps) {
           })}
         </div>
       </nav>
+
+      {/* Monthly Session Modal */}
+      <Modal
+        isOpen={showPrompt}
+        onClose={handleContinueSession}
+        title="🗓️ New Month"
+      >
+        <div className="space-y-4">
+          <p className="text-silver">
+            It's the 1st of the month! Would you like to start a fresh session by clearing all paid orders?
+          </p>
+          <p className="text-sm text-silver/70">
+            This will remove completed orders to keep your data clean. Open/unpaid orders will remain.
+          </p>
+          <div className="flex gap-3">
+            <Button
+              variant="secondary"
+              onClick={handleContinueSession}
+              className="flex-1"
+            >
+              Keep All
+            </Button>
+            <Button
+              onClick={handleStartNewSession}
+              className="flex-1"
+            >
+              Clear Paid
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

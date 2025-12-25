@@ -36,7 +36,7 @@ export async function getCustomer(id: string): Promise<Customer | undefined> {
 
 // Get all active customers
 export async function getActiveCustomers(): Promise<Customer[]> {
-  return db.customers.where('isActive').equals(1).toArray();
+  return db.customers.filter(c => c.isActive === true).toArray();
 }
 
 // Get all customers
@@ -52,11 +52,14 @@ export async function addCustomerTag(
   expiresAt?: number
 ): Promise<CustomerTagRecord> {
   // Remove existing tag of same type first
-  await db.customerTags
+  const existingTags = await db.customerTags
     .where('customerId')
     .equals(customerId)
-    .filter((t) => t.tag === tag)
-    .delete();
+    .toArray();
+  const toDelete = existingTags.filter((t) => t.tag === tag).map((t) => t.id);
+  if (toDelete.length > 0) {
+    await db.customerTags.bulkDelete(toDelete);
+  }
 
   const tagRecord: CustomerTagRecord = {
     id: uuid(),
@@ -75,11 +78,14 @@ export async function removeCustomerTag(
   customerId: string,
   tag: CustomerTag
 ): Promise<void> {
-  await db.customerTags
+  const existingTags = await db.customerTags
     .where('customerId')
     .equals(customerId)
-    .filter((t) => t.tag === tag)
-    .delete();
+    .toArray();
+  const toDelete = existingTags.filter((t) => t.tag === tag).map((t) => t.id);
+  if (toDelete.length > 0) {
+    await db.customerTags.bulkDelete(toDelete);
+  }
 }
 
 // Get tags for a customer

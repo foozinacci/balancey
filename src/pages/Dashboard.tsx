@@ -23,10 +23,14 @@ export function Dashboard() {
   const [newCustomerName, setNewCustomerName] = useState('');
 
   // Sort customers: late first, then by balance, then by activity
+  // Hide paid customers (balance = 0) from main list
   const sortedCustomers = useMemo(() => {
     let filtered = customers;
 
-    if (searchQuery) {
+    // Hide paid customers unless searching
+    if (!searchQuery) {
+      filtered = customers.filter((c) => c.balanceDueCents > 0);
+    } else {
       const query = searchQuery.toLowerCase();
       filtered = customers.filter((c) =>
         c.name.toLowerCase().includes(query)
@@ -53,30 +57,63 @@ export function Dashboard() {
   const handleCreateCustomer = async () => {
     if (!newCustomerName.trim()) return;
 
-    audio.playSuccess();
-    const customer = await createCustomer({ name: newCustomerName.trim() });
-    setNewCustomerName('');
-    setShowNewCustomer(false);
-    navigate(`/customers/${customer.id}`);
+    try {
+      audio.playSuccess();
+      const customer = await createCustomer({ name: newCustomerName.trim() });
+      console.log('Customer created:', customer);
+      setNewCustomerName('');
+      setShowNewCustomer(false);
+      navigate(`/customers/${customer.id}`);
+    } catch (error) {
+      console.error('Failed to create customer:', error);
+      audio.playError();
+    }
   };
 
   return (
     <div className="p-4 space-y-4">
-      {/* KPIs */}
+      {/* KPIs - 2x3 Grid */}
       <div className="grid grid-cols-2 gap-3">
+        {/* Row 1: Margins */}
         <Card className="text-center animate-fade-in-up stagger-1">
+          <div
+            className={`text-2xl font-bold font-mono ${kpis.dailyMarginCents >= 0
+              ? 'text-lime text-glow-lime'
+              : 'text-magenta text-glow-magenta'
+              }`}
+          >
+            {kpis.dailyMarginCents >= 0 ? '+' : ''}{formatMoney(kpis.dailyMarginCents)}
+          </div>
+          <div className="text-sm text-silver mt-1">Daily Margin</div>
+        </Card>
+        <Card className="text-center animate-fade-in-up stagger-2">
+          <div
+            className={`text-2xl font-bold font-mono ${kpis.monthlyMarginCents >= 0
+              ? 'text-lime text-glow-lime'
+              : 'text-magenta text-glow-magenta'
+              }`}
+          >
+            {kpis.monthlyMarginCents >= 0 ? '+' : ''}{formatMoney(kpis.monthlyMarginCents)}
+          </div>
+          <div className="text-sm text-silver mt-1">Monthly Margin</div>
+        </Card>
+
+        {/* Row 2: Owed */}
+        <Card className="text-center animate-fade-in-up stagger-3">
+          <div className="text-2xl font-bold text-cyan font-mono">
+            {formatMoney(kpis.todayCollectedCents)}
+          </div>
+          <div className="text-sm text-silver mt-1">Today</div>
+        </Card>
+        <Card className="text-center animate-fade-in-up stagger-4">
           <div className="text-2xl font-bold text-text-primary font-mono">
             {formatMoney(kpis.totalOwedCents)}
           </div>
           <div className="text-sm text-silver mt-1">Total Owed</div>
         </Card>
-        <Card className="text-center animate-fade-in-up stagger-2">
-          <div className="text-2xl font-bold text-lime text-glow-lime font-mono">
-            {formatMoney(kpis.todayCollectedCents)}
-          </div>
-          <div className="text-sm text-silver mt-1">Today</div>
-        </Card>
-        <Card className="text-center animate-fade-in-up stagger-3">
+
+        {/* Row 3: Status */}
+        <Card className="text-center animate-fade-in-up stagger-5">
           <div
             className={`text-2xl font-bold font-mono ${kpis.lateCustomerCount > 0 ? 'text-magenta text-glow-magenta' : 'text-text-primary'
               }`}
@@ -85,7 +122,7 @@ export function Dashboard() {
           </div>
           <div className="text-sm text-silver mt-1">Late</div>
         </Card>
-        <Card className="text-center animate-fade-in-up stagger-4">
+        <Card className="text-center animate-fade-in-up stagger-6">
           <div
             className={`text-2xl font-bold font-mono ${kpis.lowInventoryCount > 0 ? 'text-gold' : 'text-text-primary'
               }`}
@@ -207,8 +244,8 @@ function CustomerRow({ customer, style }: { customer: CustomerWithBalance; style
           <div className="text-right">
             <div
               className={`font-bold font-mono ${customer.balanceDueCents > 0
-                  ? 'text-magenta'
-                  : 'text-lime'
+                ? 'text-magenta'
+                : 'text-lime'
                 }`}
             >
               {customer.balanceDueCents > 0

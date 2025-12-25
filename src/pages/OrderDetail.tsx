@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useOrder, useCustomer, useProducts } from '../hooks/useData';
-import { addPayment, addFulfillment, cancelOrder } from '../db/orders';
+import { addPayment, addFulfillment, cancelOrder, closeOrder, updateOrderDueDate } from '../db/orders';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
@@ -28,6 +28,9 @@ export function OrderDetail() {
   const [fulfillNote, setFulfillNote] = useState('');
 
   const [showCancel, setShowCancel] = useState(false);
+  const [showClose, setShowClose] = useState(false);
+  const [showEditDue, setShowEditDue] = useState(false);
+  const [newDueDate, setNewDueDate] = useState('');
 
   if (!order) {
     return (
@@ -172,9 +175,8 @@ export function OrderDetail() {
           </div>
           <div>
             <div
-              className={`text-2xl font-bold ${
-                order.balanceDueCents > 0 ? 'text-red-600' : 'text-green-600'
-              }`}
+              className={`text-2xl font-bold ${order.balanceDueCents > 0 ? 'text-red-600' : 'text-green-600'
+                }`}
             >
               {formatMoney(order.balanceDueCents)}
             </div>
@@ -189,14 +191,52 @@ export function OrderDetail() {
         </div>
       </Card>
 
+      {/* Due Date */}
+      {order.status !== 'CANCELLED' && order.status !== 'CLOSED' && (
+        <Card>
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-sm text-silver">Due Date</div>
+              <div className={`font-semibold ${order.dueAt && order.dueAt < Date.now() ? 'text-magenta' : 'text-text-primary'}`}>
+                {order.dueAt ? formatDate(order.dueAt) : 'No due date'}
+              </div>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                if (order.dueAt) {
+                  const d = new Date(order.dueAt);
+                  setNewDueDate(d.toISOString().split('T')[0]);
+                } else {
+                  setNewDueDate('');
+                }
+                setShowEditDue(true);
+              }}
+            >
+              Edit
+            </Button>
+          </div>
+        </Card>
+      )}
+
       {/* Actions */}
       {order.status !== 'CANCELLED' && order.status !== 'CLOSED' && (
-        <div className="flex gap-2">
-          <Button onClick={() => setShowPayment(true)} className="flex-1">
-            Add Payment
-          </Button>
-          <Button onClick={() => setShowFulfill(true)} variant="secondary" className="flex-1">
-            Fulfill
+        <div className="space-y-2">
+          <div className="flex gap-2">
+            <Button onClick={() => setShowPayment(true)} className="flex-1">
+              Add Payment
+            </Button>
+            <Button onClick={() => setShowFulfill(true)} variant="secondary" className="flex-1">
+              Fulfill
+            </Button>
+          </div>
+          <Button
+            onClick={() => setShowClose(true)}
+            variant="accent"
+            className="w-full"
+          >
+            Mark as Closed
           </Button>
         </div>
       )}
@@ -366,6 +406,64 @@ export function OrderDetail() {
             </Button>
             <Button variant="danger" onClick={handleCancel} className="flex-1">
               Cancel Order
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Close order confirmation */}
+      <Modal isOpen={showClose} onClose={() => setShowClose(false)} title="Mark as Closed">
+        <div className="space-y-4">
+          <p className="text-silver">
+            Mark this order as closed/complete? Any outstanding balance will be forgiven and remaining inventory will be released.
+          </p>
+          {order.balanceDueCents > 0 && (
+            <p className="text-sm text-magenta">
+              Note: {formatMoney(order.balanceDueCents)} balance will be forgiven.
+            </p>
+          )}
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={() => setShowClose(false)} className="flex-1">
+              Cancel
+            </Button>
+            <Button
+              onClick={async () => {
+                await closeOrder(order.id);
+                setShowClose(false);
+              }}
+              className="flex-1"
+            >
+              Mark as Closed
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Edit Due Date modal */}
+      <Modal isOpen={showEditDue} onClose={() => setShowEditDue(false)} title="Edit Due Date">
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm text-silver mb-1">Due Date</label>
+            <input
+              type="date"
+              value={newDueDate}
+              onChange={(e) => setNewDueDate(e.target.value)}
+              className="w-full px-4 py-3 rounded-xl glass-card border border-surface-600 text-text-primary bg-transparent focus:outline-none focus:ring-2 focus:ring-lime/50"
+            />
+          </div>
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={() => setShowEditDue(false)} className="flex-1">
+              Cancel
+            </Button>
+            <Button
+              onClick={async () => {
+                const dueAt = newDueDate ? new Date(newDueDate + 'T23:59:59').getTime() : undefined;
+                await updateOrderDueDate(order.id, dueAt);
+                setShowEditDue(false);
+              }}
+              className="flex-1"
+            >
+              Save
             </Button>
           </div>
         </div>

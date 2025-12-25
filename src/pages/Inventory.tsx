@@ -4,9 +4,10 @@ import { createProduct, adjustInventory } from '../db/products';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
+import { Select } from '../components/Select';
 import { Modal } from '../components/Modal';
-import { formatWeight, formatMoney } from '../utils/units';
-import type { Quality, SellMode, InventoryAdjustmentType } from '../types';
+import { formatWeight, formatMoney, toGrams } from '../utils/units';
+import type { Quality, SellMode, InventoryAdjustmentType, WeightUnit } from '../types';
 
 export function Inventory() {
   const products = useProducts();
@@ -16,6 +17,7 @@ export function Inventory() {
   const [newProductName, setNewProductName] = useState('');
   const [newProductQuality, setNewProductQuality] = useState<Quality>('REGULAR');
   const [newProductPrice, setNewProductPrice] = useState('');
+  const [newProductPriceUnit, setNewProductPriceUnit] = useState<WeightUnit>('g');
 
   const [showAdjust, setShowAdjust] = useState(false);
   const [adjustProductId, setAdjustProductId] = useState<string | null>(null);
@@ -28,7 +30,12 @@ export function Inventory() {
   const handleCreateProduct = async () => {
     if (!newProductName.trim()) return;
 
-    const pricePerGram = parseFloat(newProductPrice) || 0;
+    const pricePerUnit = parseFloat(newProductPrice) || 0;
+    // Convert price to price per gram
+    // e.g., if $10/oz, then $10 / 28.3495g = $0.353/g
+    const gramsPerUnit = toGrams(1, newProductPriceUnit);
+    const pricePerGram = pricePerUnit / gramsPerUnit;
+
     await createProduct({
       name: newProductName.trim(),
       quality: newProductQuality,
@@ -38,6 +45,7 @@ export function Inventory() {
 
     setNewProductName('');
     setNewProductPrice('');
+    setNewProductPriceUnit('g');
     setShowNewProduct(false);
   };
 
@@ -144,38 +152,52 @@ export function Inventory() {
             autoFocus
           />
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Quality</label>
+            <label className="block text-sm font-medium text-silver mb-2">Quality</label>
             <div className="flex gap-2">
               <button
                 onClick={() => setNewProductQuality('REGULAR')}
-                className={`flex-1 py-2.5 rounded-lg font-medium transition-colors ${
-                  newProductQuality === 'REGULAR'
-                    ? 'bg-primary-600 text-white'
-                    : 'bg-slate-100 text-slate-700'
-                }`}
+                className={`flex-1 py-2.5 rounded-xl font-medium transition-all ${newProductQuality === 'REGULAR'
+                  ? 'bg-lime text-[#050810] font-semibold'
+                  : 'glass-card text-silver hover:text-text-primary'
+                  }`}
               >
                 Regular
               </button>
               <button
                 onClick={() => setNewProductQuality('PREMIUM')}
-                className={`flex-1 py-2.5 rounded-lg font-medium transition-colors ${
-                  newProductQuality === 'PREMIUM'
-                    ? 'bg-primary-600 text-white'
-                    : 'bg-slate-100 text-slate-700'
-                }`}
+                className={`flex-1 py-2.5 rounded-xl font-medium transition-all ${newProductQuality === 'PREMIUM'
+                  ? 'bg-lime text-[#050810] font-semibold'
+                  : 'glass-card text-silver hover:text-text-primary'
+                  }`}
               >
                 Premium
               </button>
             </div>
           </div>
-          <Input
-            label="Price per gram ($)"
-            type="text"
-            inputMode="decimal"
-            placeholder="0.00"
-            value={newProductPrice}
-            onChange={(e) => setNewProductPrice(e.target.value)}
-          />
+          <div>
+            <label className="block text-sm font-medium text-silver mb-1">Price per Weight ($)</label>
+            <div className="flex gap-2">
+              <Input
+                type="text"
+                inputMode="decimal"
+                placeholder="0.00"
+                value={newProductPrice}
+                onChange={(e) => setNewProductPrice(e.target.value)}
+                className="flex-1"
+              />
+              <Select
+                value={newProductPriceUnit}
+                onChange={(e) => setNewProductPriceUnit(e.target.value as WeightUnit)}
+                options={[
+                  { value: 'g', label: 'per g' },
+                  { value: 'oz', label: 'per oz' },
+                  { value: 'lb', label: 'per lb' },
+                  { value: 'kg', label: 'per kg' },
+                ]}
+                className="w-24"
+              />
+            </div>
+          </div>
           <div className="flex gap-2">
             <Button
               variant="secondary"
