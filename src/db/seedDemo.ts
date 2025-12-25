@@ -10,12 +10,7 @@ import { createOrder } from './orders';
 import { updateSettings } from './index';
 import type { PaymentMethod } from '../types';
 
-// Get current month dates
-function getOrderDate(dayOfMonth: number): number {
-    const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), dayOfMonth, 12, 0, 0).getTime();
-}
-
+// Get a due date for day of current month
 function getDueDate(dayOfMonth: number): number {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), dayOfMonth, 23, 59, 59).getTime();
