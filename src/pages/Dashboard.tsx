@@ -8,6 +8,7 @@ import { Input } from '../components/Input';
 import { Modal } from '../components/Modal';
 import { Tag } from '../components/Tag';
 import { formatMoney, formatWeight, formatRelativeTime } from '../utils/units';
+import { audio } from '../utils/audio';
 import type { CustomerWithBalance } from '../types';
 
 export function Dashboard() {
@@ -52,6 +53,7 @@ export function Dashboard() {
   const handleCreateCustomer = async () => {
     if (!newCustomerName.trim()) return;
 
+    audio.playSuccess();
     const customer = await createCustomer({ name: newCustomerName.trim() });
     setNewCustomerName('');
     setShowNewCustomer(false);
@@ -62,42 +64,40 @@ export function Dashboard() {
     <div className="p-4 space-y-4">
       {/* KPIs */}
       <div className="grid grid-cols-2 gap-3">
-        <Card className="text-center">
-          <div className="text-2xl font-bold text-slate-900">
+        <Card className="text-center animate-fade-in-up stagger-1">
+          <div className="text-2xl font-bold text-text-primary font-mono">
             {formatMoney(kpis.totalOwedCents)}
           </div>
-          <div className="text-sm text-slate-500">Total Owed</div>
+          <div className="text-sm text-silver mt-1">Total Owed</div>
         </Card>
-        <Card className="text-center">
-          <div className="text-2xl font-bold text-green-600">
+        <Card className="text-center animate-fade-in-up stagger-2">
+          <div className="text-2xl font-bold text-lime text-glow-lime font-mono">
             {formatMoney(kpis.todayCollectedCents)}
           </div>
-          <div className="text-sm text-slate-500">Today</div>
+          <div className="text-sm text-silver mt-1">Today</div>
         </Card>
-        <Card className="text-center">
+        <Card className="text-center animate-fade-in-up stagger-3">
           <div
-            className={`text-2xl font-bold ${
-              kpis.lateCustomerCount > 0 ? 'text-red-600' : 'text-slate-900'
-            }`}
+            className={`text-2xl font-bold font-mono ${kpis.lateCustomerCount > 0 ? 'text-magenta text-glow-magenta' : 'text-text-primary'
+              }`}
           >
             {kpis.lateCustomerCount}
           </div>
-          <div className="text-sm text-slate-500">Late</div>
+          <div className="text-sm text-silver mt-1">Late</div>
         </Card>
-        <Card className="text-center">
+        <Card className="text-center animate-fade-in-up stagger-4">
           <div
-            className={`text-2xl font-bold ${
-              kpis.lowInventoryCount > 0 ? 'text-orange-600' : 'text-slate-900'
-            }`}
+            className={`text-2xl font-bold font-mono ${kpis.lowInventoryCount > 0 ? 'text-gold' : 'text-text-primary'
+              }`}
           >
             {kpis.lowInventoryCount}
           </div>
-          <div className="text-sm text-slate-500">Low Stock</div>
+          <div className="text-sm text-silver mt-1">Low Stock</div>
         </Card>
       </div>
 
       {/* Actions */}
-      <div className="flex gap-2">
+      <div className="flex gap-3 animate-fade-in-up stagger-5">
         <Button
           onClick={() => navigate('/orders/new')}
           className="flex-1"
@@ -113,26 +113,32 @@ export function Dashboard() {
       </div>
 
       {/* Search */}
-      <Input
-        type="search"
-        placeholder="Search customers..."
-        value={searchQuery}
-        onChange={(e) => setSearchQuery(e.target.value)}
-      />
+      <div className="animate-fade-in-up" style={{ animationDelay: '0.3s' }}>
+        <Input
+          type="search"
+          placeholder="Search customers..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
+      </div>
 
       {/* Customer list */}
-      <div className="space-y-2">
+      <div className="space-y-3">
         {sortedCustomers.length === 0 ? (
           <Card className="text-center py-8">
-            <p className="text-slate-500">
+            <p className="text-silver">
               {customers.length === 0
                 ? 'No customers yet. Add one to get started!'
                 : 'No customers match your search.'}
             </p>
           </Card>
         ) : (
-          sortedCustomers.map((customer) => (
-            <CustomerRow key={customer.id} customer={customer} />
+          sortedCustomers.map((customer, index) => (
+            <CustomerRow
+              key={customer.id}
+              customer={customer}
+              style={{ animationDelay: `${0.35 + index * 0.05}s` }}
+            />
           ))
         )}
       </div>
@@ -151,7 +157,7 @@ export function Dashboard() {
             onChange={(e) => setNewCustomerName(e.target.value)}
             autoFocus
           />
-          <div className="flex gap-2">
+          <div className="flex gap-3">
             <Button
               variant="secondary"
               onClick={() => setShowNewCustomer(false)}
@@ -173,14 +179,14 @@ export function Dashboard() {
   );
 }
 
-function CustomerRow({ customer }: { customer: CustomerWithBalance }) {
+function CustomerRow({ customer, style }: { customer: CustomerWithBalance; style?: React.CSSProperties }) {
   return (
-    <Link to={`/customers/${customer.id}`}>
-      <Card className="active:bg-slate-50">
+    <Link to={`/customers/${customer.id}`} onClick={() => audio.playClick()}>
+      <Card interactive className="animate-fade-in-up opacity-0" style={style}>
         <div className="flex items-center justify-between">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <span className="font-medium text-slate-900 truncate">
+              <span className="font-semibold text-text-primary truncate">
                 {customer.name}
               </span>
               {customer.tags
@@ -189,7 +195,7 @@ function CustomerRow({ customer }: { customer: CustomerWithBalance }) {
                   <Tag key={t.id} tag={t.tag} />
                 ))}
             </div>
-            <div className="flex items-center gap-3 mt-1 text-sm text-slate-500">
+            <div className="flex items-center gap-3 mt-1 text-sm text-silver">
               {customer.typicalGrams && (
                 <span>typ ~{formatWeight(customer.typicalGrams, 'g', 0)}</span>
               )}
@@ -200,11 +206,10 @@ function CustomerRow({ customer }: { customer: CustomerWithBalance }) {
           </div>
           <div className="text-right">
             <div
-              className={`font-semibold ${
-                customer.balanceDueCents > 0
-                  ? 'text-red-600'
-                  : 'text-green-600'
-              }`}
+              className={`font-bold font-mono ${customer.balanceDueCents > 0
+                  ? 'text-magenta'
+                  : 'text-lime'
+                }`}
             >
               {customer.balanceDueCents > 0
                 ? formatMoney(customer.balanceDueCents)

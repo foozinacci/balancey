@@ -1,46 +1,274 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --color-primary-50: #eff6ff;
-  --color-primary-100: #dbeafe;
-  --color-primary-200: #bfdbfe;
-  --color-primary-300: #93c5fd;
-  --color-primary-400: #60a5fa;
-  --color-primary-500: #3b82f6;
-  --color-primary-600: #2563eb;
-  --color-primary-700: #1d4ed8;
-  --color-primary-800: #1e40af;
-  --color-primary-900: #1e3a8a;
+  /* Navy-based dark palette from favicon */
+  --color-surface-900: #050810;
+  --color-surface-800: #0a0f1c;
+  --color-surface-700: #111827;
+  --color-surface-600: #1a2332;
+  --color-surface-500: #243044;
 
-  --color-success-500: #22c55e;
-  --color-success-600: #16a34a;
-  --color-warning-500: #f59e0b;
-  --color-warning-600: #d97706;
-  --color-danger-500: #ef4444;
-  --color-danger-600: #dc2626;
+  /* Accent colors from favicon */
+  --color-lime: #7fff00;
+  --color-lime-dim: #5fcc00;
+  --color-lime-glow: rgba(127, 255, 0, 0.3);
+
+  --color-magenta: #ff2d7e;
+  --color-magenta-dim: #d6256a;
+  --color-magenta-glow: rgba(255, 45, 126, 0.3);
+
+  --color-silver: #8a9bb8;
+  --color-silver-light: #c4d0e4;
+
+  --color-gold: #c9a050;
+  --color-gold-dim: #a88540;
+  --color-gold-glow: rgba(201, 160, 80, 0.3);
+
+  /* Semantic colors */
+  --color-success: #7fff00;
+  --color-warning: #c9a050;
+  --color-danger: #ff2d7e;
+  --color-info: #8a9bb8;
+
+  /* Text colors */
+  --color-text-primary: #f0f4f8;
+  --color-text-secondary: #8a9bb8;
+  --color-text-muted: #4a5568;
 }
 
 :root {
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   -webkit-tap-highlight-color: transparent;
+  color-scheme: dark;
 }
 
+* {
+  box-sizing: border-box;
+}
+
+html,
 body {
   margin: 0;
-  background-color: #f8fafc;
+  padding: 0;
+  background: #050810;
   min-height: 100dvh;
+  color: #f0f4f8;
 }
 
+/* Mobile container for desktop - uniform iOS/Android look */
 #root {
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
+  position: relative;
+  max-width: 430px;
+  /* iPhone 14 Pro Max width */
+  margin: 0 auto;
+  background: linear-gradient(135deg, #050810 0%, #0a0f1c 50%, #111827 100%);
+  box-shadow: 0 0 60px rgba(0, 0, 0, 0.8);
+}
+
+/* On actual mobile devices, fill the screen */
+@media (max-width: 430px) {
+  #root {
+    max-width: 100%;
+    box-shadow: none;
+  }
+}
+
+/* Desktop: add subtle phone frame effect */
+@media (min-width: 431px) {
+  body {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 20px 0;
+    background: radial-gradient(ellipse at center, #0a0f1c 0%, #020408 100%);
+  }
+
+  #root {
+    border-radius: 32px;
+    overflow: hidden;
+    min-height: calc(100dvh - 40px);
+    border: 1px solid rgba(138, 155, 184, 0.1);
+  }
+}
+
+/* Glassmorphic card styles */
+.glass-card {
+  background: linear-gradient(135deg, rgba(26, 35, 50, 0.8) 0%, rgba(17, 24, 39, 0.8) 100%);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(138, 155, 184, 0.15);
+  border-radius: 16px;
+  box-shadow:
+    0 4px 30px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-card:hover {
+  border-color: rgba(138, 155, 184, 0.25);
+  box-shadow:
+    0 8px 40px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  transform: translateY(-2px);
+}
+
+.glass-card-interactive {
+  cursor: pointer;
+}
+
+.glass-card-interactive:active {
+  transform: translateY(0) scale(0.98);
+}
+
+/* Glow effects */
+.glow-lime {
+  box-shadow: 0 0 20px rgba(127, 255, 0, 0.3), 0 0 40px rgba(127, 255, 0, 0.1);
+}
+
+.glow-magenta {
+  box-shadow: 0 0 20px rgba(255, 45, 126, 0.3), 0 0 40px rgba(255, 45, 126, 0.1);
+}
+
+.glow-gold {
+  box-shadow: 0 0 20px rgba(201, 160, 80, 0.3), 0 0 40px rgba(201, 160, 80, 0.1);
+}
+
+/* Text glow */
+.text-glow-lime {
+  text-shadow: 0 0 10px rgba(127, 255, 0, 0.5), 0 0 20px rgba(127, 255, 0, 0.3);
+}
+
+.text-glow-magenta {
+  text-shadow: 0 0 10px rgba(255, 45, 126, 0.5), 0 0 20px rgba(255, 45, 126, 0.3);
+}
+
+/* Modern input styles */
+.glass-input {
+  background: rgba(17, 24, 39, 0.6);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(138, 155, 184, 0.2);
+  border-radius: 12px;
+  color: #f0f4f8;
+  padding: 12px 16px;
+  font-size: 1rem;
+  outline: none;
+  transition: all 0.3s ease;
+}
+
+.glass-input::placeholder {
+  color: #4a5568;
+}
+
+.glass-input:focus {
+  border-color: rgba(127, 255, 0, 0.5);
+  box-shadow: 0 0 0 3px rgba(127, 255, 0, 0.1), 0 0 20px rgba(127, 255, 0, 0.1);
+}
+
+/* Modern button styles */
+.btn-primary {
+  background: linear-gradient(135deg, #7fff00 0%, #5fcc00 100%);
+  color: #050810;
+  font-weight: 600;
+  padding: 12px 24px;
+  border-radius: 12px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 15px rgba(127, 255, 0, 0.3);
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 25px rgba(127, 255, 0, 0.4);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+.btn-secondary {
+  background: rgba(138, 155, 184, 0.15);
+  color: #c4d0e4;
+  font-weight: 500;
+  padding: 12px 24px;
+  border-radius: 12px;
+  border: 1px solid rgba(138, 155, 184, 0.2);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-secondary:hover {
+  background: rgba(138, 155, 184, 0.25);
+  border-color: rgba(138, 155, 184, 0.35);
+}
+
+.btn-accent {
+  background: linear-gradient(135deg, #ff2d7e 0%, #d6256a 100%);
+  color: #fff;
+  font-weight: 600;
+  padding: 12px 24px;
+  border-radius: 12px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 15px rgba(255, 45, 126, 0.3);
+}
+
+.btn-accent:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 25px rgba(255, 45, 126, 0.4);
+}
+
+/* Tags with gradients */
+.tag-late {
+  background: linear-gradient(135deg, rgba(255, 45, 126, 0.2) 0%, rgba(214, 37, 106, 0.2) 100%);
+  color: #ff2d7e;
+  border: 1px solid rgba(255, 45, 126, 0.3);
+}
+
+.tag-vip {
+  background: linear-gradient(135deg, rgba(201, 160, 80, 0.2) 0%, rgba(168, 133, 64, 0.2) 100%);
+  color: #c9a050;
+  border: 1px solid rgba(201, 160, 80, 0.3);
+}
+
+.tag-new {
+  background: linear-gradient(135deg, rgba(127, 255, 0, 0.2) 0%, rgba(95, 204, 0, 0.2) 100%);
+  color: #7fff00;
+  border: 1px solid rgba(127, 255, 0, 0.3);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(17, 24, 39, 0.5);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(138, 155, 184, 0.3);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(138, 155, 184, 0.5);
 }
 
 /* Mobile-optimized touch targets */
-button, a, input, select {
+button,
+a,
+input,
+select {
   touch-action: manipulation;
 }
 
@@ -49,4 +277,79 @@ button, a, input, select {
   .safe-bottom {
     padding-bottom: env(safe-area-inset-bottom);
   }
+}
+
+/* Animations */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse-glow {
+
+  0%,
+  100% {
+    box-shadow: 0 0 20px rgba(127, 255, 0, 0.3);
+  }
+
+  50% {
+    box-shadow: 0 0 30px rgba(127, 255, 0, 0.5);
+  }
+}
+
+@keyframes float {
+
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.4s ease-out forwards;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* Stagger animation helper */
+.stagger-1 {
+  animation-delay: 0.05s;
+}
+
+.stagger-2 {
+  animation-delay: 0.1s;
+}
+
+.stagger-3 {
+  animation-delay: 0.15s;
+}
+
+.stagger-4 {
+  animation-delay: 0.2s;
+}
+
+.stagger-5 {
+  animation-delay: 0.25s;
+}
+
+/* Mono font for numbers */
+.font-mono {
+  font-family: 'JetBrains Mono', monospace;
 }

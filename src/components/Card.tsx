@@ -1,27 +1,17 @@
-import type { ReactNode, HTMLAttributes } from 'react';
+import type { ReactNode, CSSProperties } from 'react';
 
-interface CardProps extends HTMLAttributes<HTMLDivElement> {
+interface CardProps {
   children: ReactNode;
-  padding?: 'none' | 'sm' | 'md' | 'lg';
+  className?: string;
+  interactive?: boolean;
+  style?: CSSProperties;
 }
 
-const paddingStyles = {
-  none: '',
-  sm: 'p-3',
-  md: 'p-4',
-  lg: 'p-6',
-};
-
-export function Card({
-  children,
-  padding = 'md',
-  className = '',
-  ...props
-}: CardProps) {
+export function Card({ children, className = '', interactive = false, style }: CardProps) {
   return (
     <div
-      className={`bg-white rounded-xl shadow-sm border border-slate-200 ${paddingStyles[padding]} ${className}`}
-      {...props}
+      className={`glass-card p-4 ${interactive ? 'glass-card-interactive' : ''} ${className}`}
+      style={style}
     >
       {children}
     </div>
@@ -30,14 +20,18 @@ export function Card({
 
 interface CardHeaderProps {
   title: string;
+  subtitle?: string;
   action?: ReactNode;
 }
 
-export function CardHeader({ title, action }: CardHeaderProps) {
+export function CardHeader({ title, subtitle, action }: CardHeaderProps) {
   return (
     <div className="flex items-center justify-between mb-4">
-      <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
-      {action}
+      <div>
+        <h3 className="font-semibold text-text-primary">{title}</h3>
+        {subtitle && <p className="text-sm text-silver mt-0.5">{subtitle}</p>}
+      </div>
+      {action && <div>{action}</div>}
     </div>
   );
 }
