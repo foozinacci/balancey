@@ -1,15 +1,56 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import * as THREE from 'three';
 
-export function ThreeBackground() {
+// Event system for button pops
+const hyperspaceEvents = {
+    listeners: [] as ((type: 'pop' | 'success' | 'error') => void)[],
+    emit: (type: 'pop' | 'success' | 'error') => {
+        hyperspaceEvents.listeners.forEach(fn => fn(type));
+    },
+    subscribe: (fn: (type: 'pop' | 'success' | 'error') => void) => {
+        hyperspaceEvents.listeners.push(fn);
+        return () => {
+            hyperspaceEvents.listeners = hyperspaceEvents.listeners.filter(l => l !== fn);
+        };
+    }
+};
+
+export const triggerHyperspacePop = (type: 'pop' | 'success' | 'error' = 'pop') => {
+    hyperspaceEvents.emit(type);
+};
+
+interface HyperspaceProps {
+    goalProgress?: number;
+    overdueCount?: number;
+    goalAmountCents?: number; // 1 symbol per $1 (capped for performance)
+    dailyCollectedCents?: number; // Daily collected for green $ particles
+    tipsCents?: number; // Gold $ for tips
+}
+
+export function ThreeBackground({ goalProgress = 0.5, overdueCount = 0, goalAmountCents = 100000, dailyCollectedCents = 0, tipsCents = 0 }: HyperspaceProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const sceneRef = useRef<{
         scene: THREE.Scene;
         camera: THREE.PerspectiveCamera;
         renderer: THREE.WebGLRenderer;
-        meshes: THREE.Mesh[];
+        particles: THREE.Points;
         animationId: number;
+        speed: number;
+        targetSpeed: number;
     } | null>(null);
+
+    const handlePop = useCallback((type: 'pop' | 'success' | 'error') => {
+        if (!sceneRef.current) return;
+        sceneRef.current.targetSpeed = type === 'success' ? 4 : type === 'error' ? 0.3 : 2.5;
+        setTimeout(() => {
+            if (sceneRef.current) sceneRef.current.targetSpeed = 1;
+        }, 600);
+    }, []);
+
+    useEffect(() => {
+        const unsubscribe = hyperspaceEvents.subscribe(handlePop);
+        return unsubscribe;
+    }, [handlePop]);
 
     useEffect(() => {
         if (!containerRef.current || sceneRef.current) return;
@@ -18,7 +59,6 @@ export function ThreeBackground() {
         const parent = container.parentElement;
         if (!parent) return;
 
-        // Get dimensions from parent (the mobile container)
         const getSize = () => ({
             width: parent.clientWidth,
             height: parent.clientHeight,
@@ -26,141 +66,236 @@ export function ThreeBackground() {
 
         const size = getSize();
 
-        // Scene setup
+        // Scene
         const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, size.width / size.height, 0.1, 2000);
+        camera.position.z = 5;
 
-        // Camera
-        const camera = new THREE.PerspectiveCamera(60, size.width / size.height, 0.1, 1000);
-        camera.position.z = 30;
-
-        // Renderer - optimized for S24 Ultra QHD+ display
         const renderer = new THREE.WebGLRenderer({
-            antialias: true, // Enable for QHD+ display
+            antialias: false, // Disable for performance with many particles
             alpha: true,
-            powerPreference: 'high-performance' // S24 Ultra can handle it
+            powerPreference: 'high-performance'
         });
         renderer.setSize(size.width, size.height);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Higher for QHD+
-        renderer.setClearColor(0x050810, 1);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+        renderer.setClearColor(0x040609, 1);
         container.appendChild(renderer.domElement);
 
-        // Color palette from favicon
-        const colors = {
-            lime: 0x7fff00,
-            magenta: 0xff2d7e,
-            silver: 0x8a9bb8,
-            gold: 0xc9a050,
-            cyan: 0x00ffff,
-        };
+        // Calculate particle count: 1 per $1, capped at 50,000 for performance
+        const goalDollars = Math.floor(goalAmountCents / 100);
+        const particleCount = Math.min(50000, Math.max(100, goalDollars));
 
-        // Create floating geometry with depth layers
-        const meshes: THREE.Mesh[] = [];
-        const geometries = [
-            new THREE.IcosahedronGeometry(1, 1), // More detail
-            new THREE.OctahedronGeometry(1, 0),
-            new THREE.TetrahedronGeometry(1, 0),
-            new THREE.DodecahedronGeometry(0.8, 0),
-            new THREE.TorusGeometry(0.5, 0.2, 8, 16),
+        // Expanded currency/money symbols (16 total for 4x4 atlas)
+        const currencySymbols = [
+            '$', '€', '£', '¥',      // Major currencies
+            '₿', '₹', '₩', '฿',      // Crypto & Asian
+            '¢', '₽', '₴', '₺',      // Cent, Ruble, Hryvnia, Lira
+            '◈', '◇', '●', '★',      // Geometric accents
         ];
 
-        const colorValues = [colors.lime, colors.magenta, colors.silver, colors.gold, colors.cyan];
+        // Create texture atlas (4x4 grid of symbols)
+        const createSymbolAtlas = (): THREE.CanvasTexture => {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d')!;
 
-        // More shapes for S24 Ultra's power
-        const shapeCount = 35;
+            ctx.clearRect(0, 0, 256, 256);
+            ctx.font = 'bold 48px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = '#ffffff';
+            ctx.shadowColor = '#ffffff';
+            ctx.shadowBlur = 6;
 
-        // Create 3 depth layers
-        for (let layer = 0; layer < 3; layer++) {
-            const layerZ = -layer * 15 - 5;
-            const layerOpacity = 0.25 - layer * 0.06;
-            const layerCount = Math.floor(shapeCount / 3);
-
-            for (let i = 0; i < layerCount; i++) {
-                const geometry = geometries[Math.floor(Math.random() * geometries.length)];
-                const color = colorValues[Math.floor(Math.random() * colorValues.length)];
-
-                const material = new THREE.MeshBasicMaterial({
-                    color,
-                    wireframe: true,
-                    transparent: true,
-                    opacity: layerOpacity + Math.random() * 0.1,
-                });
-
-                const mesh = new THREE.Mesh(geometry, material);
-
-                // Position in layer
-                mesh.position.x = (Math.random() - 0.5) * (50 + layer * 20);
-                mesh.position.y = (Math.random() - 0.5) * (70 + layer * 15);
-                mesh.position.z = layerZ + (Math.random() - 0.5) * 10;
-
-                // Random scale - larger in back
-                const scale = (0.5 + Math.random() * 1.5) * (1 + layer * 0.3);
-                mesh.scale.set(scale, scale, scale);
-
-                // Store animation data with pulse info
-                mesh.userData = {
-                    layer,
-                    rotationSpeed: {
-                        x: (Math.random() - 0.5) * 0.006,
-                        y: (Math.random() - 0.5) * 0.008,
-                        z: (Math.random() - 0.5) * 0.004,
-                    },
-                    floatSpeed: 0.0004 + Math.random() * 0.0008,
-                    floatOffset: Math.random() * Math.PI * 2,
-                    pulseSpeed: 0.5 + Math.random() * 1,
-                    pulseOffset: Math.random() * Math.PI * 2,
-                    originalY: mesh.position.y,
-                    baseOpacity: layerOpacity + Math.random() * 0.1,
-                };
-
-                scene.add(mesh);
-                meshes.push(mesh);
+            // Draw each symbol in a 4x4 grid
+            for (let i = 0; i < 16; i++) {
+                const x = (i % 4) * 64 + 32;
+                const y = Math.floor(i / 4) * 64 + 34;
+                ctx.fillText(currencySymbols[i], x, y);
             }
+
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.needsUpdate = true;
+            return texture;
+        };
+
+        // Colors based on status
+        const statusColors = {
+            achieved: new THREE.Color(0x7fff00),    // Lime
+            onTrack: new THREE.Color(0xc9a050),     // Gold
+            base: new THREE.Color(0x8a9bb8),        // Silver
+            behind: new THREE.Color(0xff2d7e),      // Magenta
+            overdue: new THREE.Color(0xff4444),     // Red
+        };
+
+        // Create geometry for particles
+        const geometry = new THREE.BufferGeometry();
+        const positions = new Float32Array(particleCount * 3);
+        const colors = new Float32Array(particleCount * 3);
+        const speeds = new Float32Array(particleCount);
+        const sizes = new Float32Array(particleCount);
+        const symbolIndices = new Float32Array(particleCount);
+
+        const tunnelRadius = 30;
+        const tunnelDepth = 500;
+
+        // Calculate green portion based on daily collected
+        const dailyCollectedDollars = Math.floor(dailyCollectedCents / 100);
+        const tipsDollars = Math.floor(tipsCents / 100);
+        const greenBoost = Math.min(dailyCollectedDollars / Math.max(1, goalDollars), 0.15);
+        const goldBoost = Math.min(tipsDollars / Math.max(1, goalDollars), 0.10);
+
+        // Determine color thresholds based on goal progress
+        const achievedThreshold = goalProgress * 0.7 + greenBoost;
+        const onTrackThreshold = achievedThreshold + goldBoost; // Gold tips come after green
+        const overdueThreshold = Math.min(overdueCount / Math.max(1, goalDollars * 0.01), 0.1);
+
+        for (let i = 0; i < particleCount; i++) {
+            // Position in tunnel
+            const angle = Math.random() * Math.PI * 2;
+            const radius = 2 + Math.random() * tunnelRadius;
+            positions[i * 3] = Math.cos(angle) * radius;
+            positions[i * 3 + 1] = Math.sin(angle) * radius;
+            positions[i * 3 + 2] = -Math.random() * tunnelDepth;
+
+            // Speed variation
+            speeds[i] = 0.5 + Math.random() * 1.5;
+
+            // Size variation
+            sizes[i] = 2 + Math.random() * 4;
+
+            // Color and symbol based on index and progress
+            const ratio = i / particleCount;
+            let color: THREE.Color;
+            let symbolIdx: number;
+
+            if (ratio < overdueThreshold) {
+                color = statusColors.overdue;
+                symbolIdx = Math.floor(Math.random() * 16); // Random symbol
+            } else if (ratio < achievedThreshold) {
+                color = statusColors.achieved;
+                symbolIdx = 0; // Always $ for collected/profitable (lime green)
+            } else if (ratio < onTrackThreshold) {
+                color = statusColors.onTrack;
+                symbolIdx = Math.floor(Math.random() * 8); // Currency symbols only
+            } else if (ratio < 0.85) {
+                color = statusColors.base;
+                symbolIdx = Math.floor(Math.random() * 16);
+            } else {
+                color = statusColors.behind;
+                symbolIdx = Math.floor(Math.random() * 16);
+            }
+
+            symbolIndices[i] = symbolIdx;
+            colors[i * 3] = color.r;
+            colors[i * 3 + 1] = color.g;
+            colors[i * 3 + 2] = color.b;
         }
 
-        // Animation - 60 FPS for S24 Ultra's 120Hz display
+        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+        geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+        geometry.setAttribute('speed', new THREE.BufferAttribute(speeds, 1));
+        geometry.setAttribute('symbolIndex', new THREE.BufferAttribute(symbolIndices, 1));
+
+        // Custom shader for varied sizes, colors, and symbol selection from atlas
+        const material = new THREE.ShaderMaterial({
+            uniforms: {
+                uTime: { value: 0 },
+                uSpeed: { value: 1 },
+                uTexture: { value: createSymbolAtlas() },
+            },
+            vertexShader: `
+                attribute float size;
+                attribute float speed;
+                attribute float symbolIndex;
+                attribute vec3 color;
+                varying vec3 vColor;
+                varying float vAlpha;
+                varying float vSymbolIndex;
+                uniform float uTime;
+                uniform float uSpeed;
+                
+                void main() {
+                    vColor = color;
+                    vSymbolIndex = symbolIndex;
+                    
+                    vec3 pos = position;
+                    
+                    // Move along z axis (toward camera)
+                    pos.z = mod(pos.z + uTime * speed * uSpeed * 50.0 + 500.0, 500.0) - 500.0;
+                    
+                    // Fade based on distance
+                    float dist = -pos.z;
+                    vAlpha = smoothstep(500.0, 100.0, dist) * smoothstep(0.0, 50.0, dist);
+                    
+                    // Scale up as approaching
+                    float scale = 1.0 + max(0.0, (pos.z + 50.0) / 50.0) * 2.0;
+                    
+                    vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+                    gl_PointSize = size * scale * (300.0 / -mvPosition.z);
+                    gl_Position = projectionMatrix * mvPosition;
+                }
+            `,
+            fragmentShader: `
+                uniform sampler2D uTexture;
+                varying vec3 vColor;
+                varying float vAlpha;
+                varying float vSymbolIndex;
+                
+                void main() {
+                    // Calculate UV offset for symbol in 4x4 atlas
+                    float idx = floor(vSymbolIndex + 0.5);
+                    float col = mod(idx, 4.0);
+                    float row = floor(idx / 4.0);
+                    
+                    // Map gl_PointCoord to atlas region
+                    vec2 uv = (gl_PointCoord + vec2(col, row)) * 0.25;
+                    
+                    vec4 texColor = texture2D(uTexture, uv);
+                    if (texColor.a < 0.1) discard;
+                    
+                    gl_FragColor = vec4(vColor * texColor.rgb, texColor.a * vAlpha * 0.8);
+                }
+            `,
+            transparent: true,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+        });
+
+        const particles = new THREE.Points(geometry, material);
+        scene.add(particles);
+
+        // Animation
         let time = 0;
-        let lastFrame = 0;
-        const targetFPS = 60;
-        const frameInterval = 1000 / targetFPS;
+        let speed = 1;
+        let targetSpeed = 1;
 
-        const animate = (currentTime: number) => {
+        const animate = () => {
             sceneRef.current!.animationId = requestAnimationFrame(animate);
-
-            const delta = currentTime - lastFrame;
-            if (delta < frameInterval) return;
-
-            lastFrame = currentTime - (delta % frameInterval);
             time += 0.016;
 
-            meshes.forEach((mesh) => {
-                const { rotationSpeed, floatSpeed, floatOffset, originalY, pulseSpeed, pulseOffset, baseOpacity, layer } = mesh.userData;
+            // Smooth speed transition
+            speed += (targetSpeed - speed) * 0.05;
+            sceneRef.current!.speed = speed;
+            sceneRef.current!.targetSpeed = targetSpeed;
 
-                mesh.rotation.x += rotationSpeed.x;
-                mesh.rotation.y += rotationSpeed.y;
-                mesh.rotation.z += rotationSpeed.z;
+            // Update shader uniforms
+            material.uniforms.uTime.value = time;
+            material.uniforms.uSpeed.value = speed;
 
-                // Gentle floating motion - more pronounced for back layers
-                const floatAmount = 1.5 + layer * 0.8;
-                mesh.position.y = originalY + Math.sin(time * floatSpeed * 100 + floatOffset) * floatAmount;
-
-                // Subtle pulse effect on opacity
-                const pulse = Math.sin(time * pulseSpeed + pulseOffset) * 0.03;
-                (mesh.material as THREE.MeshBasicMaterial).opacity = baseOpacity + pulse;
-            });
-
-            // Dynamic camera movement with parallax depth effect
-            camera.position.x = Math.sin(time * 0.1) * 2;
-            camera.position.y = Math.cos(time * 0.08) * 1.2;
-            camera.position.z = 30 + Math.sin(time * 0.05) * 3;
-            camera.lookAt(0, 0, -15);
+            // Subtle camera wobble
+            camera.position.x = Math.sin(time * 0.2) * 0.5;
+            camera.position.y = Math.cos(time * 0.15) * 0.3;
 
             renderer.render(scene, camera);
         };
 
         const animationId = requestAnimationFrame(animate);
-        sceneRef.current = { scene, camera, renderer, meshes, animationId };
+        sceneRef.current = { scene, camera, renderer, particles, animationId, speed: 1, targetSpeed: 1 };
 
-        // Resize handler - observe parent container
+        // Resize handler
         const resizeObserver = new ResizeObserver(() => {
             const newSize = getSize();
             camera.aspect = newSize.width / newSize.height;
@@ -178,17 +313,14 @@ export function ThreeBackground() {
                 if (container.contains(renderer.domElement)) {
                     container.removeChild(renderer.domElement);
                 }
-
-                meshes.forEach(mesh => {
-                    mesh.geometry.dispose();
-                    (mesh.material as THREE.Material).dispose();
-                });
-
+                geometry.dispose();
+                material.dispose();
+                (material.uniforms.uTexture.value as THREE.Texture).dispose();
                 renderer.dispose();
                 sceneRef.current = null;
             }
         };
-    }, []);
+    }, [goalProgress, overdueCount, goalAmountCents, dailyCollectedCents, tipsCents]);
 
     return (
         <div

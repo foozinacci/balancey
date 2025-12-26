@@ -235,7 +235,7 @@ export function NewOrder() {
       deliveryAddress: fulfillmentMethod === 'DELIVERY' ? deliveryAddress : undefined,
       deliveryFeeCents: fulfillmentMethod === 'DELIVERY' ? deliveryFeeCents : 0,
       initialPaymentCents: actualPaymentCents > 0 ? actualPaymentCents : undefined,
-      paymentMethod: actualPaymentCents > 0 ? 'CASH' : undefined,
+      paymentMethod: actualPaymentCents > 0 ? 'CARD' : undefined,
       notes: notes.trim() || undefined,
       dueAt: orderDueAt,
     };

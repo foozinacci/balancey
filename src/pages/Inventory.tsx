@@ -160,16 +160,40 @@ export function Inventory() {
         <Button onClick={() => setShowNewProduct(true)}>+ Product</Button>
       </div>
 
+      {/* Inventory Summary KPIs */}
+      {products.length > 0 && (
+        <div className="grid grid-cols-2 gap-3">
+          <Card className="text-center">
+            <div className="text-2xl font-bold text-text-primary font-mono">
+              {formatWeight(
+                regularProducts.reduce((sum, p) => sum + p.availableGrams, 0),
+                unit
+              )}
+            </div>
+            <div className="text-sm text-text-secondary mt-1">Regular Stock</div>
+          </Card>
+          <Card className="text-center">
+            <div className="text-2xl font-bold text-gold font-mono">
+              {formatWeight(
+                premiumProducts.reduce((sum, p) => sum + p.availableGrams, 0),
+                unit
+              )}
+            </div>
+            <div className="text-sm text-text-secondary mt-1">Premium Stock</div>
+          </Card>
+        </div>
+      )}
+
       {products.length === 0 ? (
         <Card className="text-center py-8">
-          <p className="text-silver">No products yet. Add one to get started!</p>
+          <p className="text-text-secondary">No products yet. Add one to get started!</p>
         </Card>
       ) : (
         <>
           {/* Regular products */}
           {regularProducts.length > 0 && (
             <div>
-              <h2 className="text-sm font-medium text-silver uppercase tracking-wider mb-2">
+              <h2 className="text-sm font-bold text-text-primary uppercase tracking-wider mb-2">
                 Regular
               </h2>
               <div className="space-y-2">
@@ -193,7 +217,7 @@ export function Inventory() {
           {/* Premium products */}
           {premiumProducts.length > 0 && (
             <div>
-              <h2 className="text-sm font-medium text-gold uppercase tracking-wider mb-2">
+              <h2 className="text-sm font-bold text-gold uppercase tracking-wider mb-2">
                 Premium
               </h2>
               <div className="space-y-2">
@@ -217,7 +241,7 @@ export function Inventory() {
           {/* Shake - aggregated totals */}
           {wasteHistory.length > 0 && (
             <div>
-              <h2 className="text-sm font-medium text-silver uppercase tracking-wider mb-2">
+              <h2 className="text-sm font-bold text-text-secondary uppercase tracking-wider mb-2">
                 Shake
               </h2>
               <Card>
@@ -280,7 +304,7 @@ export function Inventory() {
 
           {/* Quality toggle - first */}
           <div>
-            <label className="block text-sm font-medium text-silver mb-2">Quality</label>
+            <label className="block text-sm font-medium text-text-secondary mb-2">Quality</label>
             <div className="flex gap-2">
               <button
                 onClick={() => setNewProductQuality('REGULAR')}
@@ -306,7 +330,7 @@ export function Inventory() {
           {/* Quantity | Weight per Item - same row */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-silver mb-1">Quantity</label>
+              <label className="block text-sm font-medium text-text-secondary mb-1">Quantity</label>
               <Input
                 type="text"
                 inputMode="numeric"
@@ -316,7 +340,7 @@ export function Inventory() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-silver mb-1">Weight per Item</label>
+              <label className="block text-sm font-medium text-text-secondary mb-1">Weight per Item</label>
               <div className="flex gap-2">
                 <Input
                   type="text"
@@ -369,7 +393,7 @@ export function Inventory() {
           {adjustProduct && (
             <div className="text-center py-2 glass-card rounded-xl">
               <div className="font-medium text-lime text-sm">{adjustProduct.name}</div>
-              <div className="text-xs text-silver">
+              <div className="text-xs text-text-secondary">
                 Available: {adjustProduct.availableUnits} units ({formatWeight(adjustProduct.availableGrams, unit)})
               </div>
             </div>
@@ -453,7 +477,7 @@ function ProductCard({ product, unit, settings, onAddOnHand, onRemoveOnHand, onA
       <div className="flex items-center justify-between mb-3">
         <div>
           <h3 className={`font-medium ${isPremium ? 'text-gold' : 'text-text-primary'}`}>{product.name}</h3>
-          <p className="text-sm text-silver">
+          <p className="text-sm text-text-secondary">
             {formatWeight(weightPerItem, unit)} each
           </p>
         </div>
@@ -496,7 +520,7 @@ function ProductCard({ product, unit, settings, onAddOnHand, onRemoveOnHand, onA
               +
             </button>
           </div>
-          <div className="text-silver text-xs">On Hand</div>
+          <div className="text-text-secondary text-xs">On Hand</div>
         </div>
 
         {/* Reserved with controls */}
@@ -518,7 +542,7 @@ function ProductCard({ product, unit, settings, onAddOnHand, onRemoveOnHand, onA
               +
             </button>
           </div>
-          <div className="text-silver text-xs">Reserved</div>
+          <div className="text-text-secondary text-xs">Reserved</div>
         </div>
 
         {/* Available (read-only) */}
@@ -526,13 +550,13 @@ function ProductCard({ product, unit, settings, onAddOnHand, onRemoveOnHand, onA
           <div className="font-semibold mb-1 h-6 flex items-center justify-center">
             <span className={isLow ? 'text-magenta' : 'text-lime'}>{availableUnits}</span>
           </div>
-          <div className="text-silver text-xs">Available</div>
+          <div className="text-text-secondary text-xs">Available</div>
         </div>
       </div>
 
       {/* Weight and value summary */}
       <div className="text-xs text-center space-y-1 pt-1 border-t border-silver/10">
-        <p className="text-silver">
+        <p className="text-text-secondary">
           {formatWeight(totalWeightGrams, unit)} total weight
         </p>
         <div className="flex justify-center gap-4">

@@ -106,6 +106,14 @@ export interface Fulfillment {
   note?: string;
 }
 
+// Tips (delivery tips, separate from order payments)
+export interface Tip {
+  id: string;
+  createdAt: number;
+  amountCents: number;
+  note?: string;
+}
+
 // Order Policy Snapshot
 export interface OrderPolicy {
   orderId: string;

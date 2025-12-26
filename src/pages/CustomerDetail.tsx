@@ -1,16 +1,16 @@
 import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useCustomer, useCustomerOrders, useSettings } from '../hooks/useData';
-import { addPayment } from '../db/orders';
+import { addPayment, addFulfillment, closeOrder } from '../db/orders';
 import { addCustomerTag, removeCustomerTag, updateCustomer } from '../db/customers';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
-import { Select } from '../components/Select';
 import { Modal } from '../components/Modal';
 import { Tag } from '../components/Tag';
-import { formatMoney, formatWeight, formatDate, parseMoney } from '../utils/units';
-import type { PaymentMethod, CustomerTag as CustomerTagType } from '../types';
+import { formatMoney, formatWeight, formatDate } from '../utils/units';
+import { audio } from '../utils/audio';
+import type { CustomerTag as CustomerTagType } from '../types';
 
 export function CustomerDetail() {
   const { customerId } = useParams<{ customerId: string }>();
@@ -20,9 +20,6 @@ export function CustomerDetail() {
   const settings = useSettings();
 
   const [showPayment, setShowPayment] = useState(false);
-  const [paymentAmount, setPaymentAmount] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CASH');
-  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
 
   const [showTagModal, setShowTagModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -47,15 +44,23 @@ export function CustomerDetail() {
     (o) => o.status === 'CLOSED' || o.status === 'CANCELLED'
   );
 
-  const handlePayment = async () => {
-    if (!selectedOrderId) return;
-    const cents = parseMoney(paymentAmount);
-    if (cents <= 0) return;
+  // Fulfill order: pays full balance, delivers all owed grams, and closes order
+  const handleFulfillOrder = async (order: typeof openOrders[0]) => {
+    // Pay the full balance due
+    if (order.balanceDueCents > 0) {
+      await addPayment(order.id, order.balanceDueCents, 'CASH');
+    }
 
-    await addPayment(selectedOrderId, cents, paymentMethod);
-    setPaymentAmount('');
+    // Deliver all remaining owed grams
+    if (order.owedRemainingGrams > 0) {
+      await addFulfillment(order.id, 'DELIVERED', order.owedRemainingGrams);
+    }
+
+    // Close the order so it moves to history
+    await closeOrder(order.id);
+
+    audio.playSuccess();
     setShowPayment(false);
-    setSelectedOrderId(null);
   };
 
   const handleToggleTag = async (tag: CustomerTagType) => {
@@ -158,18 +163,15 @@ export function CustomerDetail() {
         {openOrders.length > 0 && (
           <Button
             variant="secondary"
-            onClick={() => {
-              setSelectedOrderId(openOrders[0].id);
-              setShowPayment(true);
-            }}
+            onClick={() => setShowPayment(true)}
           >
-            Take Payment
+            Fulfill
           </Button>
         )}
-        <Button variant="ghost" onClick={openEditModal}>
+        <Button variant="secondary" onClick={openEditModal}>
           Edit
         </Button>
-        <Button variant="ghost" onClick={() => setShowTagModal(true)}>
+        <Button variant="secondary" onClick={() => setShowTagModal(true)}>
           Tags
         </Button>
       </div>
@@ -231,8 +233,8 @@ export function CustomerDetail() {
                     <div className="text-right">
                       <span
                         className={`text-sm px-2 py-0.5 rounded ${order.status === 'CLOSED'
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-slate-100 text-slate-600'
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-slate-100 text-slate-600'
                           }`}
                       >
                         {order.status}
@@ -246,52 +248,37 @@ export function CustomerDetail() {
         </div>
       )}
 
-      {/* Payment modal */}
+      {/* Fulfill Order modal */}
       <Modal
         isOpen={showPayment}
         onClose={() => setShowPayment(false)}
-        title="Take Payment"
+        title="Fulfill Order"
       >
-        <div className="space-y-4">
-          <Select
-            label="Apply to Order"
-            value={selectedOrderId ?? ''}
-            onChange={(e) => setSelectedOrderId(e.target.value)}
-            options={openOrders.map((o) => ({
-              value: o.id,
-              label: `${formatDate(o.createdAt)} - ${formatMoney(o.balanceDueCents)} due`,
-            }))}
-          />
-          <Input
-            label="Amount"
-            type="text"
-            inputMode="decimal"
-            placeholder="$0.00"
-            value={paymentAmount}
-            onChange={(e) => setPaymentAmount(e.target.value)}
-          />
-          <Select
-            label="Method"
-            value={paymentMethod}
-            onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
-            options={[
-              { value: 'CASH', label: 'Cash' },
-              { value: 'CARD', label: 'Card' },
-              { value: 'OTHER', label: 'Other' },
-            ]}
-          />
-          <div className="flex gap-2">
-            <Button
-              variant="secondary"
-              onClick={() => setShowPayment(false)}
-              className="flex-1"
+        <div className="space-y-2">
+          {openOrders.map((order) => (
+            <button
+              key={order.id}
+              onClick={() => handleFulfillOrder(order)}
+              className="w-full p-3 glass-card rounded-xl text-left hover:bg-surface-600 transition-colors"
             >
-              Cancel
-            </Button>
-            <Button onClick={handlePayment} className="flex-1">
-              Record Payment
-            </Button>
-          </div>
+              <div className="flex justify-between items-center">
+                <div className="text-sm text-silver">{formatDate(order.createdAt)}</div>
+                <div className="text-magenta font-mono font-semibold">
+                  {formatMoney(order.balanceDueCents)}
+                </div>
+                <div className="text-text-primary font-mono">
+                  {formatWeight(order.owedRemainingGrams, 'g')}
+                </div>
+              </div>
+            </button>
+          ))}
+          <Button
+            variant="secondary"
+            onClick={() => setShowPayment(false)}
+            className="w-full mt-2"
+          >
+            Cancel
+          </Button>
         </div>
       </Modal>
 
@@ -309,8 +296,8 @@ export function CustomerDetail() {
                 key={tag}
                 onClick={() => handleToggleTag(tag)}
                 className={`w-full p-3 rounded-lg border flex items-center justify-between ${hasTag
-                    ? 'border-primary-500 bg-primary-50'
-                    : 'border-slate-200'
+                  ? 'border-primary-500 bg-primary-50'
+                  : 'border-slate-200'
                   }`}
               >
                 <Tag tag={tag} size="md" />
