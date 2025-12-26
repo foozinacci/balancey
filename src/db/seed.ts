@@ -70,7 +70,7 @@ export async function seedTestData() {
 
     // Update settings
     await db.settings.put({
-        id: 'singleton',
+        id: 'default',
         monthlyGoalCents: 2083400, // $20,834 monthly goal
         baseCostCentsPerGram: 500, // $5/gram cost
         baseSaleCentsPerGram: 1000, // $10/gram regular sale price

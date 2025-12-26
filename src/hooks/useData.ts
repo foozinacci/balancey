@@ -88,7 +88,9 @@ export function useOpenOrders(): OrderWithDetails[] {
 // Get settings
 export function useSettings(): Settings | null {
   const settings = useLiveQuery(() => getSettings(), []);
-  return settings ?? null;
+  // Return actual settings, or null only while loading (undefined)
+  // getSettings() returns DEFAULT_SETTINGS if none exist
+  return settings === undefined ? null : settings;
 }
 
 // Waste history with product names
