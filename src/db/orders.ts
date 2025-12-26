@@ -500,5 +500,6 @@ export async function clearAllData(): Promise<void> {
   await db.products.clear();
   await db.inventory.clear();
   await db.inventoryAdjustments.clear();
+  await db.tips.clear();
   // Keep settings
 }
