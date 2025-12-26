@@ -4,6 +4,7 @@ import { ThreeBackground } from './ThreeBackground';
 import { Modal } from './Modal';
 import { Button } from './Button';
 import { NotificationSplash } from './NotificationSplash';
+import { TutorialHelper } from './TutorialHelper';
 import { audio } from '../utils/audio';
 import { useMonthlySessionCheck } from '../hooks/useMonthlySession';
 import { useSettings, useDashboardKPIs } from '../hooks/useData';
@@ -143,6 +144,9 @@ export function Layout({ children }: LayoutProps) {
 
       {/* Notification splash overlay */}
       <NotificationSplash />
+
+      {/* Tutorial/Demo helper overlay */}
+      <TutorialHelper />
 
       {/* App container - centered for desktop, full width for mobile */}
       <div className="h-full w-full max-w-md mx-auto flex flex-col relative" style={{ zIndex: 10 }}>
