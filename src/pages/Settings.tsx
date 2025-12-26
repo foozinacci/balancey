@@ -131,9 +131,9 @@ export function Settings() {
               Your target monthly revenue. The Monthly Margin on the dashboard shows how you're tracking against this goal.
             </p>
           </div>
-          {settings.monthlyClearedCents && settings.monthlyClearedCents > 0 && (
+          {(settings.monthlyClearedCents ?? 0) > 0 && (
             <div className="text-sm text-silver/70">
-              Includes ${(settings.monthlyClearedCents / 100).toFixed(2)} from cleared orders
+              Includes ${((settings.monthlyClearedCents ?? 0) / 100).toFixed(2)} from cleared orders
             </div>
           )}
         </div>
