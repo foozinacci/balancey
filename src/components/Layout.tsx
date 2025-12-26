@@ -6,7 +6,7 @@ import { Button } from './Button';
 import { NotificationSplash } from './NotificationSplash';
 import { audio } from '../utils/audio';
 import { useMonthlySessionCheck } from '../hooks/useMonthlySession';
-import { useSettings } from '../hooks/useData';
+import { useSettings, useDashboardKPIs } from '../hooks/useData';
 import { usePaymentReminders } from '../hooks/usePaymentReminders';
 
 interface LayoutProps {
@@ -107,7 +107,15 @@ function NotificationBell() {
 
 export function Layout({ children }: LayoutProps) {
   const location = useLocation();
+  const settings = useSettings();
+  const kpis = useDashboardKPIs();
+  const { overdueOrders } = usePaymentReminders();
   const { showPrompt, handleStartNewSession, handleContinueSession } = useMonthlySessionCheck();
+
+  // Calculate goal progress for hyperspace background
+  const goalProgress = settings?.monthlyGoalCents && settings.monthlyGoalCents > 0
+    ? Math.min((settings.monthlyClearedCents ?? 0) / settings.monthlyGoalCents, 1)
+    : 0.5;
 
   const navItems = [
     { path: '/', label: 'Home', icon: HomeIcon },
@@ -121,32 +129,34 @@ export function Layout({ children }: LayoutProps) {
   };
 
   return (
-    <div className="flex flex-col min-h-[100dvh] relative">
-      {/* Three.js animated background - absolutely positioned behind everything */}
-      <div style={{ position: 'fixed', inset: 0, zIndex: -10, pointerEvents: 'none' }}>
-        <ThreeBackground />
+    <div className="h-[100dvh] w-full relative overflow-hidden">
+      {/* Three.js hyperspace background - driven by goal progress */}
+      <div style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none' }}>
+        <ThreeBackground
+          goalProgress={goalProgress}
+          overdueCount={overdueOrders.length}
+          goalAmountCents={settings?.monthlyGoalCents ?? 100000}
+          dailyCollectedCents={kpis.todayCollectedCents}
+          tipsCents={kpis.monthlyTipsCents}
+        />
       </div>
 
       {/* Notification splash overlay */}
       <NotificationSplash />
 
-      {/* Mobile-width container for all content */}
-      <div className="w-full max-w-md mx-auto flex flex-col min-h-[100dvh]">
-        {/* Header */}
-        <header className="glass-card rounded-none border-x-0 border-t-0 px-4 py-1 flex items-center justify-between sticky top-0 z-10">
-          {/* Notification Icon */}
+      {/* App container - centered for desktop, full width for mobile */}
+      <div className="h-full w-full max-w-md mx-auto flex flex-col relative" style={{ zIndex: 10 }}>
+
+        {/* FIXED HEADER */}
+        <header className="shrink-0 glass-card rounded-none border-x-0 border-t-0 px-4 py-1 flex items-center justify-between relative" style={{ zIndex: 20 }}>
           <div className="w-24 flex items-center">
             <NotificationBell />
           </div>
-          <Link
-            to="/"
-            onClick={handleNavClick}
-            className="flex items-center justify-center"
-          >
+          <Link to="/" onClick={handleNavClick} className="flex items-center justify-center">
             <img
               src="https://i.ibb.co/cSgYrmf9/ei-1766675949085-removebg-preview.png"
               alt="Balancey"
-              className="h-16 w-auto"
+              className="h-14 w-auto"
               style={{ filter: 'drop-shadow(0 0 15px rgba(127, 255, 0, 0.4))' }}
             />
           </Link>
@@ -155,33 +165,33 @@ export function Layout({ children }: LayoutProps) {
           </div>
         </header>
 
-        {/* Main content */}
-        <main className="flex-1 overflow-y-auto pb-20 relative" style={{ zIndex: 1 }}>{children}</main>
-      </div>
+        {/* SCROLLABLE CONTENT AREA */}
+        <main className="flex-1 overflow-y-auto overflow-x-hidden relative" style={{ zIndex: 15 }}>
+          {children}
+        </main>
 
-      {/* Bottom navigation - mobile style */}
-      <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md glass-card rounded-t-2xl border-x-0 border-b-0 safe-bottom z-10">
-        <div className="flex items-center justify-around h-14">
-          {navItems.map((item) => {
-            const isActive = location.pathname === item.path;
-            const Icon = item.icon;
-            return (
-              <Link
-                key={item.path}
-                to={item.path}
-                onClick={handleNavClick}
-                className={`flex flex-col items-center justify-center w-full h-full transition-all duration-300 ${isActive
-                  ? 'text-lime text-glow-lime'
-                  : 'text-silver hover:text-silver-light'
-                  }`}
-              >
-                <Icon className="w-5 h-5" />
-                <span className="text-xs mt-0.5 font-medium">{item.label}</span>
-              </Link>
-            );
-          })}
-        </div>
-      </nav>
+        {/* FIXED FOOTER NAV */}
+        <nav className="shrink-0 glass-card rounded-t-2xl border-x-0 border-b-0 safe-bottom relative" style={{ zIndex: 20 }}>
+          <div className="flex items-center justify-around h-16">
+            {navItems.map((item) => {
+              const isActive = location.pathname === item.path;
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  onClick={handleNavClick}
+                  className={`flex flex-col items-center justify-center w-full h-full transition-all duration-300 ${isActive ? 'text-lime text-glow-lime' : 'text-silver hover:text-silver-light'
+                    }`}
+                >
+                  <Icon className="w-5 h-5" />
+                  <span className="text-xs mt-0.5 font-medium">{item.label}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </nav>
+      </div>
 
       {/* Monthly Session Modal */}
       <Modal

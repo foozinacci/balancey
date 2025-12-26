@@ -145,6 +145,9 @@ export interface DashboardKPIs {
   monthCollectedCents: number;
   monthlyGoalCents: number;
   monthlyMarginCents: number;
+  // Delivery extras
+  monthlyDeliveryRevenueCents: number;
+  monthlyTipsCents: number;
 }
 
 export function useDashboardKPIs(): DashboardKPIs {
@@ -220,6 +223,24 @@ export function useDashboardKPIs(): DashboardKPIs {
     const monthlyExpectedCents = monthlyGoalCents > 0 ? Math.round(monthlyGoalCents * monthProgress) : 0;
     const monthlyMarginCents = monthlyGoalCents > 0 ? (totalMonthCollectedCents - monthlyExpectedCents) : totalMonthCollectedCents;
 
+    // Monthly delivery revenue (from orders with delivery fees this month)
+    const monthOrders = await db.orders
+      .filter((o) => o.createdAt >= monthStart && o.deliveryFeeCents > 0)
+      .toArray();
+    const monthlyDeliveryRevenueCents = monthOrders.reduce(
+      (sum, o) => sum + o.deliveryFeeCents,
+      0
+    );
+
+    // Monthly tips
+    const monthTips = await db.tips
+      .filter((t) => t.createdAt >= monthStart)
+      .toArray();
+    const monthlyTipsCents = monthTips.reduce(
+      (sum, t) => sum + t.amountCents,
+      0
+    );
+
     return {
       totalOwedCents,
       lateCustomerCount,
@@ -231,6 +252,8 @@ export function useDashboardKPIs(): DashboardKPIs {
       monthCollectedCents: totalMonthCollectedCents,
       monthlyGoalCents,
       monthlyMarginCents,
+      monthlyDeliveryRevenueCents,
+      monthlyTipsCents,
     };
   }, []);
 
@@ -246,6 +269,8 @@ export function useDashboardKPIs(): DashboardKPIs {
       monthCollectedCents: 0,
       monthlyGoalCents: 0,
       monthlyMarginCents: 0,
+      monthlyDeliveryRevenueCents: 0,
+      monthlyTipsCents: 0,
     }
   );
 }

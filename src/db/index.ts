@@ -11,6 +11,7 @@ import type {
   Fulfillment,
   OrderPolicy,
   Settings,
+  Tip,
 } from '../types';
 
 class BalanceyDB extends Dexie {
@@ -25,6 +26,7 @@ class BalanceyDB extends Dexie {
   fulfillments!: EntityTable<Fulfillment, 'id'>;
   orderPolicies!: EntityTable<OrderPolicy, 'orderId'>;
   settings!: EntityTable<Settings, 'id'>;
+  tips!: EntityTable<Tip, 'id'>;
 
   constructor() {
     super('balancey');
@@ -41,6 +43,11 @@ class BalanceyDB extends Dexie {
       fulfillments: 'id, orderId, createdAt',
       orderPolicies: 'orderId',
       settings: 'id',
+    });
+
+    // Version 2: Add tips table
+    this.version(2).stores({
+      tips: 'id, createdAt',
     });
   }
 }
@@ -99,4 +106,16 @@ export async function getSettings(): Promise<Settings> {
 export async function updateSettings(updates: Partial<Settings>): Promise<Settings> {
   await db.settings.update('default', updates);
   return (await db.settings.get('default'))!;
+}
+
+// Add a tip
+export async function addTip(amountCents: number, note?: string): Promise<string> {
+  const id = crypto.randomUUID();
+  await db.tips.add({
+    id,
+    createdAt: Date.now(),
+    amountCents,
+    note,
+  });
+  return id;
 }

@@ -5,10 +5,9 @@ import { addPayment, addFulfillment, cancelOrder, closeOrder, updateOrderDueDate
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
-import { Select } from '../components/Select';
 import { Modal } from '../components/Modal';
-import { formatMoney, formatWeight, formatDate, formatDateTime, parseMoney } from '../utils/units';
-import type { PaymentMethod, FulfillmentEvent } from '../types';
+import { formatMoney, formatWeight, formatDate, formatDateTime } from '../utils/units';
+import { audio } from '../utils/audio';
 
 export function OrderDetail() {
   const { orderId } = useParams<{ orderId: string }>();
@@ -17,14 +16,7 @@ export function OrderDetail() {
   const customer = useCustomer(order?.customerId);
   const products = useProducts();
 
-  const [showPayment, setShowPayment] = useState(false);
-  const [paymentAmount, setPaymentAmount] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CASH');
-  const [paymentNote, setPaymentNote] = useState('');
-
   const [showFulfill, setShowFulfill] = useState(false);
-  const [fulfillGrams, setFulfillGrams] = useState('');
-  const [fulfillEvent, setFulfillEvent] = useState<FulfillmentEvent>('PICKED_UP');
   const [fulfillNote, setFulfillNote] = useState('');
 
   const [showCancel, setShowCancel] = useState(false);
@@ -48,29 +40,30 @@ export function OrderDetail() {
     return products.find((p) => p.id === productId)?.name ?? 'Unknown';
   };
 
-  const handleAddPayment = async () => {
-    const cents = parseMoney(paymentAmount);
-    if (cents <= 0) return;
-
-    await addPayment(order.id, cents, paymentMethod, paymentNote.trim() || undefined);
-    setPaymentAmount('');
-    setPaymentNote('');
-    setShowPayment(false);
-  };
-
+  // Combined fulfill: pays full balance due, delivers all owed grams, and closes order
   const handleFulfill = async () => {
-    const grams = parseFloat(fulfillGrams) || 0;
+    // Pay the full balance due
+    if (order.balanceDueCents > 0) {
+      await addPayment(order.id, order.balanceDueCents, 'CASH', fulfillNote.trim() || undefined);
+    }
 
-    await addFulfillment(
-      order.id,
-      fulfillEvent,
-      grams > 0 ? grams : order.owedRemainingGrams,
-      undefined,
-      fulfillNote.trim() || undefined
-    );
-    setFulfillGrams('');
+    // Deliver all remaining owed grams
+    if (order.owedRemainingGrams > 0) {
+      await addFulfillment(
+        order.id,
+        'DELIVERED',
+        order.owedRemainingGrams,
+        undefined,
+        fulfillNote.trim() || undefined
+      );
+    }
+
+    // Close the order
+    await closeOrder(order.id);
+
     setFulfillNote('');
     setShowFulfill(false);
+    audio.playSuccess();
   };
 
   const handleCancel = async () => {
@@ -86,17 +79,13 @@ export function OrderDetail() {
     CANCELLED: 'bg-slate-100 text-slate-500',
   };
 
-  const fulfillmentEvents: FulfillmentEvent[] =
-    order.fulfillmentMethod === 'PICKUP'
-      ? ['READY', 'PICKED_UP']
-      : ['READY', 'OUT_FOR_DELIVERY', 'DELIVERED'];
 
   return (
     <div className="p-4 space-y-4">
       {/* Back button */}
       <button
         onClick={() => navigate(-1)}
-        className="flex items-center text-slate-600 -ml-1"
+        className="flex items-center text-silver -ml-1"
       >
         <svg className="w-5 h-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -107,8 +96,8 @@ export function OrderDetail() {
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-xl font-bold text-slate-900">Order Details</h1>
-          <p className="text-sm text-slate-500">{formatDate(order.createdAt)}</p>
+          <h1 className="text-xl font-bold text-text-primary">Order Details</h1>
+          <p className="text-sm text-silver">{formatDate(order.createdAt)}</p>
         </div>
         <span className={`px-3 py-1 rounded-full text-sm font-medium ${statusStyles[order.status]}`}>
           {order.status}
@@ -118,10 +107,10 @@ export function OrderDetail() {
       {/* Customer link */}
       {customer && (
         <Link to={`/customers/${customer.id}`}>
-          <Card className="active:bg-slate-50">
+          <Card className="active:bg-surface-700">
             <div className="flex items-center justify-between">
-              <div className="font-medium text-slate-900">{customer.name}</div>
-              <svg className="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <div className="font-medium text-text-primary">{customer.name}</div>
+              <svg className="w-5 h-5 text-silver" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
             </div>
@@ -131,14 +120,14 @@ export function OrderDetail() {
 
       {/* Order items */}
       <Card>
-        <h3 className="font-semibold text-slate-900 mb-3">Items</h3>
+        <h3 className="font-semibold text-text-primary mb-3">Items</h3>
         <div className="space-y-2">
           {order.items.map((item) => (
             <div key={item.id} className="flex justify-between">
               <div>
-                <div className="font-medium">{getProductName(item.productId)}</div>
+                <div className="font-medium text-text-primary">{getProductName(item.productId)}</div>
                 {item.quantityGrams && item.quantityGrams > 0 && (
-                  <div className="text-sm text-slate-500">
+                  <div className="text-sm text-silver">
                     {formatWeight(item.quantityGrams, 'g')}
                     {item.pricePerGramCentsSnapshot && (
                       <> @ {formatMoney(item.pricePerGramCentsSnapshot)}/g</>
@@ -146,7 +135,7 @@ export function OrderDetail() {
                   </div>
                 )}
               </div>
-              <div className="font-medium">{formatMoney(item.lineTotalCents)}</div>
+              <div className="font-medium text-text-primary">{formatMoney(item.lineTotalCents)}</div>
             </div>
           ))}
 
@@ -168,25 +157,25 @@ export function OrderDetail() {
       <Card>
         <div className="grid grid-cols-3 gap-4 text-center">
           <div>
-            <div className="text-2xl font-bold text-green-600">
+            <div className="text-2xl font-bold text-lime">
               {formatMoney(order.paidTotalCents)}
             </div>
-            <div className="text-sm text-slate-500">Paid</div>
+            <div className="text-sm text-silver">Paid</div>
           </div>
           <div>
             <div
-              className={`text-2xl font-bold ${order.balanceDueCents > 0 ? 'text-red-600' : 'text-green-600'
+              className={`text-2xl font-bold ${order.balanceDueCents > 0 ? 'text-magenta' : 'text-lime'
                 }`}
             >
               {formatMoney(order.balanceDueCents)}
             </div>
-            <div className="text-sm text-slate-500">Due</div>
+            <div className="text-sm text-silver">Due</div>
           </div>
           <div>
-            <div className="text-2xl font-bold text-slate-900">
+            <div className="text-2xl font-bold text-text-primary">
               {formatWeight(order.owedRemainingGrams, 'g', 0)}
             </div>
-            <div className="text-sm text-slate-500">Owed</div>
+            <div className="text-sm text-silver">Owed</div>
           </div>
         </div>
       </Card>
@@ -223,17 +212,12 @@ export function OrderDetail() {
       {/* Actions */}
       {order.status !== 'CANCELLED' && order.status !== 'CLOSED' && (
         <div className="space-y-2">
-          <div className="flex gap-2">
-            <Button onClick={() => setShowPayment(true)} className="flex-1">
-              Add Payment
-            </Button>
-            <Button onClick={() => setShowFulfill(true)} variant="secondary" className="flex-1">
-              Fulfill
-            </Button>
-          </div>
+          <Button onClick={() => setShowFulfill(true)} className="w-full">
+            Fulfill Order
+          </Button>
           <Button
             onClick={() => setShowClose(true)}
-            variant="accent"
+            variant="secondary"
             className="w-full"
           >
             Mark as Closed
@@ -244,17 +228,14 @@ export function OrderDetail() {
       {/* Payments */}
       {order.payments.length > 0 && (
         <Card>
-          <h3 className="font-semibold text-slate-900 mb-3">Payments</h3>
+          <h3 className="font-semibold text-text-primary mb-3">Payments</h3>
           <div className="space-y-2">
             {order.payments.map((payment) => (
               <div key={payment.id} className="flex justify-between items-center">
-                <div>
-                  <div className="text-sm text-slate-500">
-                    {formatDateTime(payment.createdAt)}
-                  </div>
-                  <div className="text-sm text-slate-600">{payment.method}</div>
+                <div className="text-sm text-silver">
+                  {formatDateTime(payment.createdAt)}
                 </div>
-                <div className="font-medium text-green-600">
+                <div className="font-medium text-lime">
                   +{formatMoney(payment.amountCents)}
                 </div>
               </div>
@@ -263,21 +244,22 @@ export function OrderDetail() {
         </Card>
       )}
 
-      {/* Fulfillments */}
+      {/* Deliveries */}
       {order.fulfillments.length > 0 && (
         <Card>
-          <h3 className="font-semibold text-slate-900 mb-3">Fulfillment Log</h3>
+          <h3 className="font-semibold text-text-primary mb-3">Deliveries</h3>
           <div className="space-y-2">
             {order.fulfillments.map((f) => (
               <div key={f.id} className="flex justify-between items-center">
                 <div>
-                  <div className="text-sm text-slate-500">{formatDateTime(f.createdAt)}</div>
-                  <div className="font-medium">{f.event.replace(/_/g, ' ')}</div>
-                  {f.note && <div className="text-sm text-slate-600">{f.note}</div>}
+                  <div className="text-sm text-silver">{formatDateTime(f.createdAt)}</div>
+                  {f.note && <div className="text-sm text-silver">{f.note}</div>}
                 </div>
-                {f.deliveredGrams && f.deliveredGrams > 0 && (
-                  <div className="font-medium">{formatWeight(f.deliveredGrams, 'g')}</div>
-                )}
+                <div className="text-right">
+                  {f.deliveredGrams && f.deliveredGrams > 0 && (
+                    <div className="font-medium text-text-primary">{formatWeight(f.deliveredGrams, 'g')}</div>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -287,22 +269,22 @@ export function OrderDetail() {
       {/* Policy snapshot */}
       {order.policy && (
         <Card>
-          <h3 className="font-semibold text-slate-900 mb-3">Policy Applied</h3>
+          <h3 className="font-semibold text-text-primary mb-3">Policy Applied</h3>
           <div className="space-y-1 text-sm">
             {order.policy.computedTypicalGrams && (
               <div className="flex justify-between">
-                <span className="text-slate-500">Typical:</span>
-                <span>{formatWeight(order.policy.computedTypicalGrams, 'g')}</span>
+                <span className="text-silver">Typical:</span>
+                <span className="text-text-primary">{formatWeight(order.policy.computedTypicalGrams, 'g')}</span>
               </div>
             )}
             <div className="flex justify-between">
-              <span className="text-slate-500">Holdback:</span>
-              <span>{Math.round(order.policy.appliedHoldbackPct * 100)}%</span>
+              <span className="text-silver">Holdback:</span>
+              <span className="text-text-primary">{Math.round(order.policy.appliedHoldbackPct * 100)}%</span>
             </div>
             {order.policy.computedDeliverNowGrams !== undefined && (
               <div className="flex justify-between">
-                <span className="text-slate-500">Give now:</span>
-                <span>{formatWeight(order.policy.computedDeliverNowGrams, 'g')}</span>
+                <span className="text-silver">Give now:</span>
+                <span className="text-text-primary">{formatWeight(order.policy.computedDeliverNowGrams, 'g')}</span>
               </div>
             )}
           </div>
@@ -320,75 +302,36 @@ export function OrderDetail() {
         </Button>
       )}
 
-      {/* Payment modal */}
-      <Modal isOpen={showPayment} onClose={() => setShowPayment(false)} title="Add Payment">
-        <div className="space-y-4">
-          <Input
-            label="Amount"
-            type="text"
-            inputMode="decimal"
-            placeholder="$0.00"
-            value={paymentAmount}
-            onChange={(e) => setPaymentAmount(e.target.value)}
-            autoFocus
-          />
-          <Select
-            label="Method"
-            value={paymentMethod}
-            onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
-            options={[
-              { value: 'CASH', label: 'Cash' },
-              { value: 'CARD', label: 'Card' },
-              { value: 'OTHER', label: 'Other' },
-            ]}
-          />
-          <Input
-            label="Note (optional)"
-            value={paymentNote}
-            onChange={(e) => setPaymentNote(e.target.value)}
-          />
-          <div className="flex gap-2">
-            <Button variant="secondary" onClick={() => setShowPayment(false)} className="flex-1">
-              Cancel
-            </Button>
-            <Button onClick={handleAddPayment} className="flex-1">
-              Add Payment
-            </Button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* Fulfill modal */}
+      {/* Fulfill modal - pays and delivers in one action */}
       <Modal isOpen={showFulfill} onClose={() => setShowFulfill(false)} title="Fulfill Order">
         <div className="space-y-4">
-          <Select
-            label="Event"
-            value={fulfillEvent}
-            onChange={(e) => setFulfillEvent(e.target.value as FulfillmentEvent)}
-            options={fulfillmentEvents.map((e) => ({
-              value: e,
-              label: e.replace(/_/g, ' '),
-            }))}
-          />
-          <Input
-            label={`Amount (${formatWeight(order.owedRemainingGrams, 'g')} remaining)`}
-            type="text"
-            inputMode="decimal"
-            placeholder={order.owedRemainingGrams.toString()}
-            value={fulfillGrams}
-            onChange={(e) => setFulfillGrams(e.target.value)}
-          />
+          {/* Summary of what will happen */}
+          <div className="glass-card p-3 rounded-xl space-y-2">
+            {order.balanceDueCents > 0 && (
+              <div className="flex justify-between">
+                <span className="text-silver">Payment:</span>
+                <span className="text-lime font-mono">{formatMoney(order.balanceDueCents)}</span>
+              </div>
+            )}
+            {order.owedRemainingGrams > 0 && (
+              <div className="flex justify-between">
+                <span className="text-silver">Delivery:</span>
+                <span className="text-text-primary font-mono">{formatWeight(order.owedRemainingGrams, 'g')}</span>
+              </div>
+            )}
+          </div>
           <Input
             label="Note (optional)"
             value={fulfillNote}
             onChange={(e) => setFulfillNote(e.target.value)}
+            autoFocus
           />
           <div className="flex gap-2">
             <Button variant="secondary" onClick={() => setShowFulfill(false)} className="flex-1">
               Cancel
             </Button>
             <Button onClick={handleFulfill} className="flex-1">
-              Record Fulfillment
+              Fulfill
             </Button>
           </div>
         </div>

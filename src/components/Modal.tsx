@@ -25,7 +25,7 @@ export function Modal({ isOpen, onClose, title, children }: ModalProps) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 pb-20 sm:pb-4">
+    <div className="fixed inset-0 flex items-end sm:items-center justify-center p-4 pb-20 sm:pb-4" style={{ zIndex: 9999 }}>
       {/* Backdrop with blur */}
       <div
         className="absolute inset-0 bg-surface-900/80 backdrop-blur-sm"
@@ -33,7 +33,7 @@ export function Modal({ isOpen, onClose, title, children }: ModalProps) {
       />
 
       {/* Modal content - mobile optimized */}
-      <div className="glass-card relative w-full max-w-sm p-4 animate-fade-in-up border-lime/20 z-10">
+      <div className="glass-card relative w-full max-w-sm p-4 animate-fade-in-up border-lime/20" style={{ zIndex: 10000 }}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-bold text-text-primary">{title}</h2>
           <button

@@ -49,8 +49,7 @@ export function Clients() {
                 <h1 className="text-xl font-bold text-text-primary">Clients</h1>
                 <button
                     onClick={() => setShowNewClient(true)}
-                    className="px-4 py-2.5 rounded-xl font-semibold transition-all"
-                    style={{ backgroundColor: '#c9a050', color: '#050810' }}
+                    className="px-4 py-2.5 rounded-xl font-semibold transition-all bg-lime text-surface-900"
                 >
                     + Client
                 </button>
