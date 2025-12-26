@@ -1,10 +1,10 @@
 import { useState, useRef } from 'react';
 import { useSettings } from '../hooks/useData';
-import { updateSettings, db } from '../db';
+import { updateSettings } from '../db';
 import { downloadBackup, importFromFile } from '../db/backup';
-import { createBalanceCarryover, clearPaidOrders, clearAllData } from '../db/orders';
+import { createBalanceCarryover, clearAllData } from '../db/orders';
 import { createCustomer, getAllCustomers } from '../db/customers';
-import { seedTestData } from '../db/seed';
+import { useTutorial } from '../hooks/useTutorial.tsx';
 import { Card, CardHeader } from '../components/Card';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
@@ -33,12 +33,10 @@ export function Settings() {
   const [goalInput, setGoalInput] = useState('');
 
   // Clear confirmation modals
-  const [showClearPaid, setShowClearPaid] = useState(false);
   const [showClearAll, setShowClearAll] = useState(false);
-  const [showClearWaste, setShowClearWaste] = useState(false);
   const [clearAllConfirmText, setClearAllConfirmText] = useState('');
-  const [showSeedDemo, setShowSeedDemo] = useState(false);
-  const [seedStatus, setSeedStatus] = useState<'idle' | 'loading' | 'success'>('idle');
+  // Tutorial/Demo hook
+  const { startTutorial, isActive: isTutorialActive } = useTutorial();
   if (!settings) {
     return <div className="p-4">Loading...</div>;
   }
@@ -521,124 +519,24 @@ export function Settings() {
             Quick Add Debts
           </Button>
           <div className="border-t border-surface-600 pt-3 mt-3">
-            <p className="text-sm text-silver mb-2">Quick Actions</p>
-            <div className="grid grid-cols-2 gap-2">
-              <Button
-                variant="secondary"
-                onClick={() => setShowClearPaid(true)}
-              >
-                Clear Paid
-              </Button>
-              <Button
-                variant="secondary"
-                onClick={() => setShowClearWaste(true)}
-              >
-                Clear Waste
-              </Button>
-              <Button
-                variant="danger"
-                onClick={() => setShowClearAll(true)}
-              >
-                Clear All
-              </Button>
-              <Button
-                variant="secondary"
-                onClick={() => setShowSeedDemo(true)}
-              >
-                🌱 Demo Data
-              </Button>
-            </div>
+            <Button
+              variant="danger"
+              onClick={() => setShowClearAll(true)}
+              className="w-full"
+            >
+              Clear All Data
+            </Button>
+            <button
+              onClick={startTutorial}
+              disabled={isTutorialActive}
+              className="mt-3 w-full text-center text-sm text-lime hover:text-lime/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              🌱 Run Tutorial
+            </button>
           </div>
         </div>
       </Card>
 
-      {/* Clear Paid Confirmation Modal */}
-      <Modal
-        isOpen={showClearPaid}
-        onClose={() => setShowClearPaid(false)}
-        title="Clear Paid Orders"
-      >
-        <div className="space-y-4">
-          <p className="text-silver">
-            This will remove all CLOSED/PAID orders and their payment history.
-          </p>
-          <p className="text-sm text-magenta">
-            This action cannot be undone.
-          </p>
-          <div className="flex gap-3">
-            <Button
-              variant="secondary"
-              onClick={() => setShowClearPaid(false)}
-              className="flex-1"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={async () => {
-                try {
-                  const count = await clearPaidOrders();
-                  setShowClearPaid(false);
-                  // Show success briefly then close
-                  setTimeout(() => {
-                    window.location.reload();
-                  }, 500);
-                  console.log(`Cleared ${count} paid orders`);
-                } catch (error) {
-                  console.error('Failed to clear paid orders:', error);
-                }
-              }}
-              className="flex-1"
-            >
-              Clear Paid
-            </Button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* Clear Waste Confirmation Modal */}
-      <Modal
-        isOpen={showClearWaste}
-        onClose={() => setShowClearWaste(false)}
-        title="Clear Waste History"
-      >
-        <div className="space-y-4">
-          <p className="text-silver">
-            This will clear all waste records from inventory history.
-          </p>
-          <p className="text-sm text-silver/70">
-            Your current stock levels will not be affected.
-          </p>
-          <div className="flex gap-3">
-            <Button
-              variant="secondary"
-              onClick={() => setShowClearWaste(false)}
-              className="flex-1"
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="danger"
-              onClick={async () => {
-                try {
-                  // Clear only WASTE type adjustments
-                  const wasteRecords = await db.inventoryAdjustments
-                    .filter(a => a.type === 'WASTE')
-                    .toArray();
-                  const ids = wasteRecords.map(r => r.id);
-                  await db.inventoryAdjustments.bulkDelete(ids);
-                  setShowClearWaste(false);
-                  window.location.reload();
-                } catch (error) {
-                  console.error('Failed to clear waste:', error);
-                }
-              }}
-              className="flex-1"
-            >
-              Clear Waste
-            </Button>
-          </div>
-        </div>
-      </Modal>
 
       {/* Clear All Confirmation Modal */}
       <Modal
@@ -698,66 +596,6 @@ export function Settings() {
         </div>
       </Modal>
 
-      {/* Seed Demo Modal */}
-      <Modal
-        isOpen={showSeedDemo}
-        onClose={() => setShowSeedDemo(false)}
-        title="🌱 Load Demo Data"
-      >
-        <div className="space-y-4">
-          {seedStatus === 'success' ? (
-            <div className="text-center py-4">
-              <p className="text-lime text-lg font-semibold">✅ Demo data loaded!</p>
-              <p className="text-silver text-sm mt-2">12 clients, 14 products, varied orders, $1M goal</p>
-            </div>
-          ) : (
-            <>
-              <p className="text-silver">
-                This will create test data for integrity testing.
-              </p>
-              <ul className="text-sm text-silver space-y-1">
-                <li>• 6 Regular products (4 standard + 2 specialty bulk)</li>
-                <li>• 8 Premium products (4 standard + 4 specialty bulk)</li>
-                <li>• 6 Pay Now clients (fully paid)</li>
-                <li>• 6 Pay Later clients (with open orders)</li>
-                <li>• Delivery orders with calculated fees</li>
-                <li>• Monthly goal: $20,834</li>
-              </ul>
-            </>
-          )}
-          <div className="flex gap-3">
-            <Button
-              variant="secondary"
-              onClick={() => {
-                setShowSeedDemo(false);
-                setSeedStatus('idle');
-              }}
-              className="flex-1"
-            >
-              {seedStatus === 'success' ? 'Close' : 'Cancel'}
-            </Button>
-            {seedStatus !== 'success' && (
-              <Button
-                onClick={async () => {
-                  setSeedStatus('loading');
-                  try {
-                    await seedTestData();
-                    setSeedStatus('success');
-                    setTimeout(() => window.location.reload(), 1500);
-                  } catch (error) {
-                    console.error('Failed to seed demo:', error);
-                    setSeedStatus('idle');
-                  }
-                }}
-                disabled={seedStatus === 'loading'}
-                className="flex-1"
-              >
-                {seedStatus === 'loading' ? 'Loading...' : 'Load Demo'}
-              </Button>
-            )}
-          </div>
-        </div>
-      </Modal>
 
       {/* Quick add modal */}
       <Modal
