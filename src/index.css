@@ -125,13 +125,12 @@ canvas {
   pointer-events: none !important;
 }
 
-/* Animated 3D backdrop with floating orbs */
+/* Animated backdrop with floating orbs */
 .backdrop-3d {
   position: fixed;
   inset: 0;
   z-index: -1;
   overflow: hidden;
-  perspective: 1000px;
   pointer-events: none;
 }
 
