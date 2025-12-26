@@ -182,10 +182,9 @@ canvas {
   }
 }
 
-/* 3D Perspective container */
+/* Perspective container - disabled to prevent interaction issues */
 .perspective-container {
-  perspective: 1200px;
-  transform-style: preserve-3d;
+  /* perspective and preserve-3d removed to fix input clicking */
 }
 
 /* Glassmorphic card styles with 3D depth */
@@ -200,9 +199,7 @@ canvas {
     0 8px 32px rgba(0, 0, 0, 0.2),
     inset 0 1px 0 rgba(255, 255, 255, 0.08),
     inset 0 -1px 0 rgba(0, 0, 0, 0.2);
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-  transform-style: preserve-3d;
-  transform: translateZ(0);
+  transition: all 0.3s ease;
 }
 
 .glass-card:hover {
@@ -211,17 +208,15 @@ canvas {
     0 12px 48px rgba(0, 0, 0, 0.5),
     0 24px 60px rgba(0, 0, 0, 0.3),
     inset 0 1px 0 rgba(255, 255, 255, 0.12);
-  transform: translateY(-4px) translateZ(20px);
 }
 
-/* Interactive 3D tilt on touch/hover */
+/* Interactive card subtle lift effect */
 .glass-card-3d {
-  transform-style: preserve-3d;
   transition: transform 0.3s ease;
 }
 
 .glass-card-3d:hover {
-  transform: rotateX(2deg) rotateY(-2deg) translateZ(10px);
+  transform: translateY(-2px);
 }
 
 .glass-card-interactive {
