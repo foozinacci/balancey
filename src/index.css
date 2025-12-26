@@ -398,6 +398,23 @@ select {
   touch-action: manipulation;
 }
 
+/* CRITICAL: Ensure all form elements are ALWAYS interactive */
+input,
+select,
+button,
+textarea,
+.glass-input {
+  position: relative;
+  z-index: 100 !important;
+  pointer-events: auto !important;
+}
+
+/* Ensure cards don't create stacking issues */
+.glass-card {
+  position: relative;
+  z-index: 1;
+}
+
 /* Safe area insets for iOS */
 @supports (padding-bottom: env(safe-area-inset-bottom)) {
   .safe-bottom {
