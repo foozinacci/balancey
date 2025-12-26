@@ -226,14 +226,6 @@ export function Settings() {
                   // Get the unit to display - use tier.unit if valid, otherwise first available
                   const displayUnit = tier.unit && tier.unit !== settings.defaultWeightUnit ? tier.unit : availableUnits[0] || 'oz';
 
-                  // If tier has invalid/missing unit, update it
-                  if (!tier.unit || tier.unit === settings.defaultWeightUnit) {
-                    const newTiers = [...(settings.priceTiers ?? [])];
-                    newTiers[index] = { ...tier, unit: availableUnits[0] || 'oz' };
-                    updateSettings({ priceTiers: newTiers });
-                    return null; // Skip render this cycle, will re-render with correct unit
-                  }
-
                   return (
                     <div key={index} className="glass-card p-3 rounded-xl">
                       <div className="grid grid-cols-[1fr_1fr_auto] gap-3 items-end">

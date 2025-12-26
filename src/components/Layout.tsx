@@ -121,9 +121,11 @@ export function Layout({ children }: LayoutProps) {
   };
 
   return (
-    <div className="flex flex-col min-h-[100dvh]">
-      {/* Three.js animated background */}
-      <ThreeBackground />
+    <div className="flex flex-col min-h-[100dvh] relative">
+      {/* Three.js animated background - absolutely positioned behind everything */}
+      <div style={{ position: 'fixed', inset: 0, zIndex: -10, pointerEvents: 'none' }}>
+        <ThreeBackground />
+      </div>
 
       {/* Notification splash overlay */}
       <NotificationSplash />
@@ -154,7 +156,7 @@ export function Layout({ children }: LayoutProps) {
         </header>
 
         {/* Main content */}
-        <main className="flex-1 overflow-y-auto pb-20 relative z-0">{children}</main>
+        <main className="flex-1 overflow-y-auto pb-20 relative" style={{ zIndex: 1 }}>{children}</main>
       </div>
 
       {/* Bottom navigation - mobile style */}
