@@ -64,7 +64,7 @@ export function NewClientModal({ isOpen, onClose, onClientCreated }: NewClientMo
                 onClientCreated(client.id);
             } else {
                 // Navigate to new order with client selected
-                navigate(`/new-order?customer=${client.id}`);
+                navigate(`/orders/new?customer=${client.id}`);
             }
         } catch (error) {
             console.error('Failed to create client:', error);
