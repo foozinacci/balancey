@@ -1,15 +1,17 @@
 import { useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useCustomers, useDashboardKPIs, useInitialize } from '../hooks/useData';
+import { useCustomers, useDashboardKPIs, useInitialize, useOpenOrders } from '../hooks/useData';
 import { createCustomer } from '../db/customers';
+import { addPayment } from '../db/orders';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
+import { Select } from '../components/Select';
 import { Modal } from '../components/Modal';
 import { Tag } from '../components/Tag';
-import { formatMoney, formatWeight, formatRelativeTime } from '../utils/units';
+import { formatMoney, formatWeight, formatRelativeTime, parseMoney } from '../utils/units';
 import { audio } from '../utils/audio';
-import type { CustomerWithBalance } from '../types';
+import type { CustomerWithBalance, PaymentMethod } from '../types';
 
 export function Dashboard() {
   useInitialize();
@@ -22,7 +24,11 @@ export function Dashboard() {
   const [showNewCustomer, setShowNewCustomer] = useState(false);
   const [newCustomerName, setNewCustomerName] = useState('');
 
-  // Sort customers: late first, then by balance, then by activity
+  // Quick payment state
+  const [showQuickPayment, setShowQuickPayment] = useState(false);
+  const [quickPayCustomer, setQuickPayCustomer] = useState<CustomerWithBalance | null>(null);
+  const [quickPayAmount, setQuickPayAmount] = useState('');
+  const [quickPayMethod, setQuickPayMethod] = useState<PaymentMethod>('CASH');
   // Hide paid customers (balance = 0) from main list
   const sortedCustomers = useMemo(() => {
     let filtered = customers;
@@ -70,6 +76,41 @@ export function Dashboard() {
     }
   };
 
+  // Open orders for quick payment (to know which order to apply payment to)
+  const openOrders = useOpenOrders();
+
+  const openQuickPayment = (customer: CustomerWithBalance) => {
+    setQuickPayCustomer(customer);
+    setQuickPayAmount('');
+    setQuickPayMethod('CASH');
+    setShowQuickPayment(true);
+    audio.playClick();
+  };
+
+  const handleQuickPayment = async () => {
+    if (!quickPayCustomer) return;
+    const cents = parseMoney(quickPayAmount);
+    if (cents <= 0) return;
+
+    // Find the oldest open order for this customer
+    const customerOrder = openOrders.find(o => o.customerId === quickPayCustomer.id);
+    if (!customerOrder) {
+      audio.playError();
+      return;
+    }
+
+    try {
+      await addPayment(customerOrder.id, cents, quickPayMethod);
+      audio.playSuccess();
+      setShowQuickPayment(false);
+      setQuickPayCustomer(null);
+      setQuickPayAmount('');
+    } catch (error) {
+      console.error('Failed to record payment:', error);
+      audio.playError();
+    }
+  };
+
   return (
     <div className="p-4 space-y-4">
       {/* Header row - matches Clients/Inventory */}
@@ -80,6 +121,7 @@ export function Dashboard() {
 
       {/* KPIs - 2x3 Grid */}
       <div className="grid grid-cols-2 gap-3">
+        {/* Row 1: Margins */}
         {/* Row 1: Margins */}
         <Card className="text-center animate-fade-in-up stagger-1">
           <div
@@ -101,45 +143,42 @@ export function Dashboard() {
           >
             {kpis.monthlyMarginCents >= 0 ? '+' : ''}{formatMoney(kpis.monthlyMarginCents)}
           </div>
-          <div className="text-sm text-silver mt-1">Monthly Margin</div>
+          <div className="text-sm text-silver mt-1">Margin to Date</div>
         </Card>
 
-        {/* Row 2: Owed */}
+        {/* Row 2: Money */}
         <Card className="text-center animate-fade-in-up stagger-3">
-          <div className="text-2xl font-bold text-cyan font-mono">
-            {formatMoney(kpis.todayCollectedCents)}
+          <div className="text-2xl font-bold text-lime font-mono">
+            {formatMoney(kpis.monthCollectedCents)}
           </div>
-          <div className="text-sm text-silver mt-1">Today</div>
+          <div className="text-sm text-silver mt-1">Collected</div>
         </Card>
         <Card className="text-center animate-fade-in-up stagger-4">
-          <div className="text-2xl font-bold text-text-primary font-mono">
-            {formatMoney(kpis.totalOwedCents)}
-          </div>
-          <div className="text-sm text-silver mt-1">Total Owed</div>
-        </Card>
-
-        {/* Row 3: Status */}
-        <Card className="text-center animate-fade-in-up stagger-5">
           <div
-            className={`text-2xl font-bold font-mono ${kpis.lateCustomerCount > 0 ? 'text-magenta text-glow-magenta' : 'text-text-primary'
+            className={`text-2xl font-bold font-mono ${kpis.totalOwedCents > 0
+              ? 'text-magenta'
+              : 'text-lime'
               }`}
           >
-            {kpis.lateCustomerCount}
+            {formatMoney(Math.abs(kpis.totalOwedCents))}
           </div>
-          <div className="text-sm text-silver mt-1">Late</div>
+          <div className="text-sm text-silver mt-1">
+            {kpis.totalOwedCents > 0 ? 'Daily Owed' : 'Daily Profit'}
+          </div>
+        </Card>
+
+        {/* Row 3: Inventory */}
+        <Card className="text-center animate-fade-in-up stagger-5">
+          <div className="text-2xl font-bold text-text-primary font-mono">
+            {formatWeight(kpis.regularStockGrams, 'g')}
+          </div>
+          <div className="text-sm text-silver mt-1">Regular Inventory</div>
         </Card>
         <Card className="text-center animate-fade-in-up stagger-6">
-          <div className="space-y-0.5">
-            <div className="flex justify-center gap-1 text-lg font-bold font-mono text-lime">
-              <span>R:</span>
-              <span>{formatWeight(kpis.regularStockGrams, 'g')}</span>
-            </div>
-            <div className="flex justify-center gap-1 text-lg font-bold font-mono text-gold">
-              <span>P:</span>
-              <span>{formatWeight(kpis.premiumStockGrams, 'g')}</span>
-            </div>
+          <div className="text-2xl font-bold text-gold font-mono">
+            {formatWeight(kpis.premiumStockGrams, 'g')}
           </div>
-          <div className="text-sm text-silver mt-1">Stock Left</div>
+          <div className="text-sm text-silver mt-1">Premium Inventory</div>
         </Card>
       </div>
 
@@ -178,6 +217,7 @@ export function Dashboard() {
               key={customer.id}
               customer={customer}
               style={{ animationDelay: `${0.35 + index * 0.05}s` }}
+              onQuickPay={() => openQuickPayment(customer)}
             />
           ))
         )}
@@ -215,35 +255,108 @@ export function Dashboard() {
           </div>
         </div>
       </Modal>
+
+      {/* Quick Payment Modal */}
+      <Modal
+        isOpen={showQuickPayment}
+        onClose={() => setShowQuickPayment(false)}
+        title={`Quick Payment - ${quickPayCustomer?.name ?? ''}`}
+      >
+        <div className="space-y-4">
+          {quickPayCustomer && (
+            <div className="text-center py-2 glass-card rounded-xl">
+              <div className="text-lg font-bold text-magenta">
+                {formatMoney(quickPayCustomer.balanceDueCents)}
+              </div>
+              <div className="text-sm text-silver">Balance Due</div>
+            </div>
+          )}
+          <Input
+            label="Payment Amount"
+            type="text"
+            inputMode="decimal"
+            placeholder="$0.00"
+            value={quickPayAmount}
+            onChange={(e) => setQuickPayAmount(e.target.value)}
+            autoFocus
+          />
+          <Select
+            label="Payment Method"
+            value={quickPayMethod}
+            onChange={(e) => setQuickPayMethod(e.target.value as PaymentMethod)}
+            options={[
+              { value: 'CASH', label: 'Cash' },
+              { value: 'CARD', label: 'Card' },
+              { value: 'OTHER', label: 'Other' },
+            ]}
+          />
+          <div className="flex gap-3">
+            <Button
+              variant="secondary"
+              onClick={() => setShowQuickPayment(false)}
+              className="flex-1"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleQuickPayment}
+              disabled={!quickPayAmount || parseMoney(quickPayAmount) <= 0}
+              className="flex-1"
+            >
+              Record
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
 
-function CustomerRow({ customer, style }: { customer: CustomerWithBalance; style?: React.CSSProperties }) {
+function CustomerRow({
+  customer,
+  style,
+  onQuickPay
+}: {
+  customer: CustomerWithBalance;
+  style?: React.CSSProperties;
+  onQuickPay?: () => void;
+}) {
   return (
-    <Link to={`/customers/${customer.id}`} onClick={() => audio.playClick()}>
-      <Card interactive className="animate-fade-in-up opacity-0" style={style}>
-        <div className="flex items-center justify-between">
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <span className="font-semibold text-text-primary truncate">
-                {customer.name}
-              </span>
-              {customer.tags
-                .filter((t) => t.tag !== 'NEW')
-                .map((t) => (
-                  <Tag key={t.id} tag={t.tag} />
-                ))}
-            </div>
-            <div className="flex items-center gap-3 mt-1 text-sm text-silver">
-              {customer.typicalGrams && (
-                <span>typ ~{formatWeight(customer.typicalGrams, 'g', 0)}</span>
-              )}
-              {customer.lastActivityAt && (
-                <span>{formatRelativeTime(customer.lastActivityAt)}</span>
-              )}
-            </div>
+    <Card interactive className="animate-fade-in-up opacity-0" style={style}>
+      <div className="flex items-center justify-between">
+        <Link to={`/customers/${customer.id}`} onClick={() => audio.playClick()} className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-text-primary truncate">
+              {customer.name}
+            </span>
+            {customer.tags
+              .filter((t) => t.tag !== 'NEW')
+              .map((t) => (
+                <Tag key={t.id} tag={t.tag} />
+              ))}
           </div>
+          <div className="flex items-center gap-3 mt-1 text-sm text-silver">
+            {customer.typicalGrams && (
+              <span>typ ~{formatWeight(customer.typicalGrams, 'g', 0)}</span>
+            )}
+            {customer.lastActivityAt && (
+              <span>{formatRelativeTime(customer.lastActivityAt)}</span>
+            )}
+          </div>
+        </Link>
+        <div className="flex items-center gap-2">
+          {customer.balanceDueCents > 0 && onQuickPay && (
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onQuickPay();
+              }}
+              className="px-3 py-1.5 rounded-lg bg-lime/20 text-lime font-semibold text-sm hover:bg-lime/30 transition-all"
+            >
+              $
+            </button>
+          )}
           <div className="text-right">
             <div
               className={`font-bold font-mono ${customer.balanceDueCents > 0
@@ -257,7 +370,7 @@ function CustomerRow({ customer, style }: { customer: CustomerWithBalance; style
             </div>
           </div>
         </div>
-      </Card>
-    </Link>
+      </div>
+    </Card>
   );
 }

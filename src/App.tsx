@@ -8,6 +8,9 @@ import { OrderDetail } from './pages/OrderDetail';
 import { Inventory } from './pages/Inventory';
 import { Settings } from './pages/Settings';
 
+// Make seed function available in console for testing
+import './db/seed';
+
 function App() {
   return (
     <BrowserRouter>

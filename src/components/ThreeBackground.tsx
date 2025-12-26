@@ -33,14 +33,14 @@ export function ThreeBackground() {
         const camera = new THREE.PerspectiveCamera(60, size.width / size.height, 0.1, 1000);
         camera.position.z = 30;
 
-        // Renderer - optimized for mobile
+        // Renderer - optimized for S24 Ultra QHD+ display
         const renderer = new THREE.WebGLRenderer({
-            antialias: false, // Disable for better mobile performance
+            antialias: true, // Enable for QHD+ display
             alpha: true,
-            powerPreference: 'low-power' // Better battery life on mobile
+            powerPreference: 'high-performance' // S24 Ultra can handle it
         });
         renderer.setSize(size.width, size.height);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5)); // Cap pixel ratio
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Higher for QHD+
         renderer.setClearColor(0x050810, 1);
         container.appendChild(renderer.domElement);
 
@@ -50,63 +50,77 @@ export function ThreeBackground() {
             magenta: 0xff2d7e,
             silver: 0x8a9bb8,
             gold: 0xc9a050,
+            cyan: 0x00ffff,
         };
 
-        // Create fewer floating geometry for mobile performance
+        // Create floating geometry with depth layers
         const meshes: THREE.Mesh[] = [];
         const geometries = [
-            new THREE.IcosahedronGeometry(1, 0),
+            new THREE.IcosahedronGeometry(1, 1), // More detail
             new THREE.OctahedronGeometry(1, 0),
             new THREE.TetrahedronGeometry(1, 0),
+            new THREE.DodecahedronGeometry(0.8, 0),
+            new THREE.TorusGeometry(0.5, 0.2, 8, 16),
         ];
 
-        const colorValues = [colors.lime, colors.magenta, colors.silver, colors.gold];
+        const colorValues = [colors.lime, colors.magenta, colors.silver, colors.gold, colors.cyan];
 
-        // Fewer shapes for better performance
-        const shapeCount = 20;
+        // More shapes for S24 Ultra's power
+        const shapeCount = 35;
 
-        for (let i = 0; i < shapeCount; i++) {
-            const geometry = geometries[Math.floor(Math.random() * geometries.length)];
-            const color = colorValues[Math.floor(Math.random() * colorValues.length)];
+        // Create 3 depth layers
+        for (let layer = 0; layer < 3; layer++) {
+            const layerZ = -layer * 15 - 5;
+            const layerOpacity = 0.25 - layer * 0.06;
+            const layerCount = Math.floor(shapeCount / 3);
 
-            const material = new THREE.MeshBasicMaterial({
-                color,
-                wireframe: true,
-                transparent: true,
-                opacity: 0.12 + Math.random() * 0.15,
-            });
+            for (let i = 0; i < layerCount; i++) {
+                const geometry = geometries[Math.floor(Math.random() * geometries.length)];
+                const color = colorValues[Math.floor(Math.random() * colorValues.length)];
 
-            const mesh = new THREE.Mesh(geometry, material);
+                const material = new THREE.MeshBasicMaterial({
+                    color,
+                    wireframe: true,
+                    transparent: true,
+                    opacity: layerOpacity + Math.random() * 0.1,
+                });
 
-            // Position relative to viewport
-            mesh.position.x = (Math.random() - 0.5) * 40;
-            mesh.position.y = (Math.random() - 0.5) * 60;
-            mesh.position.z = (Math.random() - 0.5) * 20 - 10;
+                const mesh = new THREE.Mesh(geometry, material);
 
-            // Random scale
-            const scale = 0.5 + Math.random() * 1.5;
-            mesh.scale.set(scale, scale, scale);
+                // Position in layer
+                mesh.position.x = (Math.random() - 0.5) * (50 + layer * 20);
+                mesh.position.y = (Math.random() - 0.5) * (70 + layer * 15);
+                mesh.position.z = layerZ + (Math.random() - 0.5) * 10;
 
-            // Store animation data
-            mesh.userData = {
-                rotationSpeed: {
-                    x: (Math.random() - 0.5) * 0.008,
-                    y: (Math.random() - 0.5) * 0.008,
-                    z: (Math.random() - 0.5) * 0.008,
-                },
-                floatSpeed: 0.0003 + Math.random() * 0.0006,
-                floatOffset: Math.random() * Math.PI * 2,
-                originalY: mesh.position.y,
-            };
+                // Random scale - larger in back
+                const scale = (0.5 + Math.random() * 1.5) * (1 + layer * 0.3);
+                mesh.scale.set(scale, scale, scale);
 
-            scene.add(mesh);
-            meshes.push(mesh);
+                // Store animation data with pulse info
+                mesh.userData = {
+                    layer,
+                    rotationSpeed: {
+                        x: (Math.random() - 0.5) * 0.006,
+                        y: (Math.random() - 0.5) * 0.008,
+                        z: (Math.random() - 0.5) * 0.004,
+                    },
+                    floatSpeed: 0.0004 + Math.random() * 0.0008,
+                    floatOffset: Math.random() * Math.PI * 2,
+                    pulseSpeed: 0.5 + Math.random() * 1,
+                    pulseOffset: Math.random() * Math.PI * 2,
+                    originalY: mesh.position.y,
+                    baseOpacity: layerOpacity + Math.random() * 0.1,
+                };
+
+                scene.add(mesh);
+                meshes.push(mesh);
+            }
         }
 
-        // Animation with throttle for mobile
+        // Animation - 60 FPS for S24 Ultra's 120Hz display
         let time = 0;
         let lastFrame = 0;
-        const targetFPS = 30; // Cap at 30 FPS for mobile
+        const targetFPS = 60;
         const frameInterval = 1000 / targetFPS;
 
         const animate = (currentTime: number) => {
@@ -119,20 +133,26 @@ export function ThreeBackground() {
             time += 0.016;
 
             meshes.forEach((mesh) => {
-                const { rotationSpeed, floatSpeed, floatOffset, originalY } = mesh.userData;
+                const { rotationSpeed, floatSpeed, floatOffset, originalY, pulseSpeed, pulseOffset, baseOpacity, layer } = mesh.userData;
 
                 mesh.rotation.x += rotationSpeed.x;
                 mesh.rotation.y += rotationSpeed.y;
                 mesh.rotation.z += rotationSpeed.z;
 
-                // Gentle floating motion
-                mesh.position.y = originalY + Math.sin(time * floatSpeed * 100 + floatOffset) * 1.5;
+                // Gentle floating motion - more pronounced for back layers
+                const floatAmount = 1.5 + layer * 0.8;
+                mesh.position.y = originalY + Math.sin(time * floatSpeed * 100 + floatOffset) * floatAmount;
+
+                // Subtle pulse effect on opacity
+                const pulse = Math.sin(time * pulseSpeed + pulseOffset) * 0.03;
+                (mesh.material as THREE.MeshBasicMaterial).opacity = baseOpacity + pulse;
             });
 
-            // Subtle camera movement
-            camera.position.x = Math.sin(time * 0.08) * 1.5;
-            camera.position.y = Math.cos(time * 0.06) * 0.8;
-            camera.lookAt(0, 0, 0);
+            // Dynamic camera movement with parallax depth effect
+            camera.position.x = Math.sin(time * 0.1) * 2;
+            camera.position.y = Math.cos(time * 0.08) * 1.2;
+            camera.position.z = 30 + Math.sin(time * 0.05) * 3;
+            camera.lookAt(0, 0, -15);
 
             renderer.render(scene, camera);
         };

@@ -32,7 +32,7 @@ export function CustomerDetail() {
   if (!customer) {
     return (
       <div className="p-4 text-center">
-        <p className="text-slate-500">Customer not found</p>
+        <p className="text-silver">Customer not found</p>
         <Button variant="secondary" onClick={() => navigate('/')} className="mt-4">
           Go Back
         </Button>
@@ -86,7 +86,7 @@ export function CustomerDetail() {
       {/* Back button */}
       <button
         onClick={() => navigate('/')}
-        className="flex items-center text-slate-600 -ml-1"
+        className="flex items-center text-silver -ml-1"
       >
         <svg className="w-5 h-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -98,7 +98,7 @@ export function CustomerDetail() {
       <Card>
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-xl font-bold text-slate-900">{customer.name}</h1>
+            <h1 className="text-xl font-bold text-text-primary">{customer.name}</h1>
             <div className="flex flex-wrap gap-1 mt-2">
               {customer.tags.map((t) => (
                 <Tag key={t.id} tag={t.tag} size="md" />
@@ -107,32 +107,31 @@ export function CustomerDetail() {
           </div>
           <div className="text-right">
             <div
-              className={`text-2xl font-bold ${
-                customer.balanceDueCents > 0 ? 'text-red-600' : 'text-green-600'
-              }`}
+              className={`text-2xl font-bold ${customer.balanceDueCents > 0 ? 'text-red-600' : 'text-green-600'
+                }`}
             >
               {customer.balanceDueCents > 0
                 ? formatMoney(customer.balanceDueCents)
                 : 'Paid'}
             </div>
-            <div className="text-sm text-slate-500">balance due</div>
+            <div className="text-sm text-silver">balance due</div>
           </div>
         </div>
 
         {/* Typical order stats */}
         {customer.typicalGrams && (
-          <div className="mt-4 pt-4 border-t border-slate-100">
+          <div className="mt-4 pt-4 border-t border-surface-600">
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
-                <span className="text-slate-500">Typical:</span>{' '}
-                <span className="font-medium">
+                <span className="text-silver">Typical:</span>{' '}
+                <span className="font-medium text-text-primary">
                   {formatWeight(customer.typicalGrams, settings?.defaultWeightUnit ?? 'g')}
                 </span>
               </div>
               {customer.upperNormalGrams && (
                 <div>
-                  <span className="text-slate-500">Upper normal:</span>{' '}
-                  <span className="font-medium">
+                  <span className="text-silver">Upper normal:</span>{' '}
+                  <span className="font-medium text-text-primary">
                     {formatWeight(customer.upperNormalGrams, settings?.defaultWeightUnit ?? 'g')}
                   </span>
                 </div>
@@ -142,8 +141,8 @@ export function CustomerDetail() {
         )}
 
         {customer.notes && (
-          <div className="mt-4 pt-4 border-t border-slate-100">
-            <p className="text-sm text-slate-600">{customer.notes}</p>
+          <div className="mt-4 pt-4 border-t border-surface-600">
+            <p className="text-sm text-silver">{customer.notes}</p>
           </div>
         )}
       </Card>
@@ -178,17 +177,17 @@ export function CustomerDetail() {
       {/* Open orders */}
       {openOrders.length > 0 && (
         <div>
-          <h2 className="text-lg font-semibold text-slate-900 mb-2">Open Orders</h2>
+          <h2 className="text-lg font-semibold text-text-primary mb-2">Open Orders</h2>
           <div className="space-y-2">
             {openOrders.map((order) => (
               <Link key={order.id} to={`/orders/${order.id}`}>
-                <Card className="active:bg-slate-50">
+                <Card className="active:bg-surface-700">
                   <div className="flex justify-between items-center">
                     <div>
-                      <div className="text-sm text-slate-500">
+                      <div className="text-sm text-silver">
                         {formatDate(order.createdAt)}
                       </div>
-                      <div className="font-medium">
+                      <div className="font-medium text-text-primary">
                         {order.requestedTotalGrams > 0 &&
                           formatWeight(order.requestedTotalGrams, 'g')}
                         {order.requestedTotalUnits > 0 &&
@@ -199,7 +198,7 @@ export function CustomerDetail() {
                       <div className="font-semibold text-red-600">
                         {formatMoney(order.balanceDueCents)}
                       </div>
-                      <div className="text-sm text-slate-500">
+                      <div className="text-sm text-silver">
                         paid {formatMoney(order.paidTotalCents)}
                       </div>
                     </div>
@@ -214,28 +213,27 @@ export function CustomerDetail() {
       {/* Closed orders */}
       {closedOrders.length > 0 && (
         <div>
-          <h2 className="text-lg font-semibold text-slate-900 mb-2">History</h2>
+          <h2 className="text-lg font-semibold text-text-primary mb-2">History</h2>
           <div className="space-y-2">
             {closedOrders.slice(0, 5).map((order) => (
               <Link key={order.id} to={`/orders/${order.id}`}>
-                <Card className="active:bg-slate-50">
+                <Card className="active:bg-surface-700">
                   <div className="flex justify-between items-center">
                     <div>
-                      <div className="text-sm text-slate-500">
+                      <div className="text-sm text-silver">
                         {formatDate(order.createdAt)}
                       </div>
-                      <div className="font-medium">
+                      <div className="font-medium text-text-primary">
                         {order.requestedTotalGrams > 0 &&
                           formatWeight(order.requestedTotalGrams, 'g')}
                       </div>
                     </div>
                     <div className="text-right">
                       <span
-                        className={`text-sm px-2 py-0.5 rounded ${
-                          order.status === 'CLOSED'
+                        className={`text-sm px-2 py-0.5 rounded ${order.status === 'CLOSED'
                             ? 'bg-green-100 text-green-700'
                             : 'bg-slate-100 text-slate-600'
-                        }`}
+                          }`}
                       >
                         {order.status}
                       </span>
@@ -310,11 +308,10 @@ export function CustomerDetail() {
               <button
                 key={tag}
                 onClick={() => handleToggleTag(tag)}
-                className={`w-full p-3 rounded-lg border flex items-center justify-between ${
-                  hasTag
+                className={`w-full p-3 rounded-lg border flex items-center justify-between ${hasTag
                     ? 'border-primary-500 bg-primary-50'
                     : 'border-slate-200'
-                }`}
+                  }`}
               >
                 <Tag tag={tag} size="md" />
                 {hasTag && (

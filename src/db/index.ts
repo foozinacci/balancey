@@ -50,12 +50,14 @@ export const db = new BalanceyDB();
 // Default settings
 export const DEFAULT_SETTINGS: Settings = {
   id: 'default',
-  depositMinPctNormal: 0.40,
-  holdbackPctNormal: 0.10,
-  depositMinPctOverTypical: 0.60,
-  holdbackPctOverTypical: 0.20,
-  depositMinPctLate: 0.80,
-  holdbackPctLate: 0.30,
+  // Price tiers start empty - users add their own custom price points
+  priceTiers: [],
+  depositMinPctNormal: 0,
+  holdbackPctNormal: 0,
+  depositMinPctOverTypical: 0,
+  holdbackPctOverTypical: 0,
+  depositMinPctLate: 0,
+  holdbackPctLate: 0,
   doNotAdvanceBlocksOrder: true,
   presetWeights: [1, 2, 3.5, 7, 14, 28],
   defaultWeightUnit: 'g',
@@ -63,6 +65,8 @@ export const DEFAULT_SETTINGS: Settings = {
   defaultDueDays: 7,
   typicalOrderHistoryCount: 10,
   typicalOrderIncludePartial: true,
+  deliveryFeeMethod: 'gas',
+  vehicleType: 'sedan',
 };
 
 // Initialize settings if not present

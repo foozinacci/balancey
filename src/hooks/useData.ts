@@ -195,8 +195,8 @@ export function useDashboardKPIs(): DashboardKPIs {
       dayProgress = (currentHour - businessStartHour) / businessDayHours;
     }
 
-    const dailyExpectedCents = Math.round(dailyGoalCents * dayProgress);
-    const dailyMarginCents = todayCollectedCents - dailyExpectedCents;
+    const dailyExpectedCents = monthlyGoalCents > 0 ? Math.round(dailyGoalCents * dayProgress) : 0;
+    const dailyMarginCents = monthlyGoalCents > 0 ? (todayCollectedCents - dailyExpectedCents) : todayCollectedCents;
 
     // Monthly payments
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
@@ -212,11 +212,11 @@ export function useDashboardKPIs(): DashboardKPIs {
     const clearedCents = settings.monthlyClearedCents ?? 0;
     const totalMonthCollectedCents = monthCollectedCents + clearedCents;
 
-    // Monthly margin
+    // Monthly margin - only calculate if goal exists
     const currentDay = now.getDate();
     const monthProgress = (currentDay - 1 + currentHour / 24) / daysInMonth;
-    const monthlyExpectedCents = Math.round(monthlyGoalCents * monthProgress);
-    const monthlyMarginCents = totalMonthCollectedCents - monthlyExpectedCents;
+    const monthlyExpectedCents = monthlyGoalCents > 0 ? Math.round(monthlyGoalCents * monthProgress) : 0;
+    const monthlyMarginCents = monthlyGoalCents > 0 ? (totalMonthCollectedCents - monthlyExpectedCents) : totalMonthCollectedCents;
 
     return {
       totalOwedCents,

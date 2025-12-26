@@ -4,7 +4,7 @@ import { updateSettings, db } from '../db';
 import { downloadBackup, importFromFile } from '../db/backup';
 import { createBalanceCarryover, clearPaidOrders, clearAllData } from '../db/orders';
 import { createCustomer, getAllCustomers } from '../db/customers';
-import { seedDemoData } from '../db/seedDemo';
+import { seedTestData } from '../db/seed';
 import { Card, CardHeader } from '../components/Card';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
@@ -27,8 +27,10 @@ export function Settings() {
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importStatus, setImportStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
 
-  const [editingPresets, setEditingPresets] = useState(false);
-  const [presetsInput, setPresetsInput] = useState('');
+  // Local state for price inputs (to prevent cursor snapping)
+  const [baseCostInput, setBaseCostInput] = useState('');
+  const [baseSaleInput, setBaseSaleInput] = useState('');
+  const [goalInput, setGoalInput] = useState('');
 
   // Clear confirmation modals
   const [showClearPaid, setShowClearPaid] = useState(false);
@@ -102,23 +104,6 @@ export function Settings() {
     await updateSettings({ [field]: value });
   };
 
-  const handleUpdatePresets = async () => {
-    const weights = presetsInput
-      .split(',')
-      .map((s) => parseFloat(s.trim()))
-      .filter((n) => !isNaN(n) && n > 0);
-
-    if (weights.length > 0) {
-      await updateSettings({ presetWeights: weights });
-    }
-    setEditingPresets(false);
-  };
-
-  const startEditingPresets = () => {
-    setPresetsInput(settings.presetWeights.join(', '));
-    setEditingPresets(true);
-  };
-
   return (
     <div className="p-4 space-y-4">
       <h1 className="text-xl font-bold text-text-primary">Settings</h1>
@@ -133,10 +118,13 @@ export function Settings() {
               type="text"
               inputMode="decimal"
               placeholder="$0.00"
-              value={settings.monthlyGoalCents ? (settings.monthlyGoalCents / 100).toFixed(2) : ''}
-              onChange={(e) => {
+              value={goalInput || (settings.monthlyGoalCents ? (settings.monthlyGoalCents / 100).toFixed(2) : '')}
+              onChange={(e) => setGoalInput(e.target.value)}
+              onFocus={() => setGoalInput(settings.monthlyGoalCents ? (settings.monthlyGoalCents / 100).toFixed(2) : '')}
+              onBlur={(e) => {
                 const cents = parseMoney(e.target.value);
                 updateSettings({ monthlyGoalCents: cents });
+                setGoalInput('');
               }}
             />
             <p className="text-xs text-silver/70 mt-1">
@@ -148,6 +136,207 @@ export function Settings() {
               Includes ${(settings.monthlyClearedCents / 100).toFixed(2)} from cleared orders
             </div>
           )}
+        </div>
+      </Card>
+
+      {/* Pricing Settings */}
+      <Card>
+        <CardHeader title="Pricing" />
+        <div className="space-y-4">
+          {/* Base Prices */}
+          <div className="grid grid-cols-[1fr_1fr_auto] gap-3 items-end">
+            <div>
+              <label className="block text-sm text-silver mb-1">Your Cost ($/{settings.defaultWeightUnit})</label>
+              <Input
+                type="text"
+                inputMode="decimal"
+                placeholder="0.00"
+                value={baseCostInput || (settings.baseCostCentsPerGram ? (settings.baseCostCentsPerGram / 100).toFixed(2) : '')}
+                onChange={(e) => setBaseCostInput(e.target.value)}
+                onFocus={() => setBaseCostInput(settings.baseCostCentsPerGram ? (settings.baseCostCentsPerGram / 100).toFixed(2) : '')}
+                onBlur={(e) => {
+                  const cents = parseMoney(e.target.value);
+                  updateSettings({ baseCostCentsPerGram: cents });
+                  setBaseCostInput('');
+                }}
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-silver mb-1">Sale Price ($/{settings.defaultWeightUnit})</label>
+              <Input
+                type="text"
+                inputMode="decimal"
+                placeholder="0.00"
+                value={baseSaleInput || (settings.baseSaleCentsPerGram ? (settings.baseSaleCentsPerGram / 100).toFixed(2) : '')}
+                onChange={(e) => setBaseSaleInput(e.target.value)}
+                onFocus={() => setBaseSaleInput(settings.baseSaleCentsPerGram ? (settings.baseSaleCentsPerGram / 100).toFixed(2) : '')}
+                onBlur={(e) => {
+                  const cents = parseMoney(e.target.value);
+                  updateSettings({ baseSaleCentsPerGram: cents });
+                  setBaseSaleInput('');
+                }}
+              />
+            </div>
+            <Select
+              value={settings.defaultWeightUnit}
+              onChange={(e) => updateSettings({ defaultWeightUnit: e.target.value as WeightUnit })}
+              options={[
+                { value: 'g', label: 'g' },
+                { value: 'oz', label: 'oz' },
+                { value: 'lb', label: 'lb' },
+                { value: 'kg', label: 'kg' },
+              ]}
+            />
+          </div>
+
+          {/* Other Units */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-medium text-silver">Other Units</label>
+              {(() => {
+                const usedUnits = (settings.priceTiers ?? []).map(t => t.unit);
+                const allUnits: WeightUnit[] = ['g', 'oz', 'lb', 'kg'];
+                // Exclude default unit (used by base prices) and already-used units
+                const availableUnits = allUnits.filter(u => u !== settings.defaultWeightUnit && !usedUnits.includes(u));
+                if (availableUnits.length === 0) return null;
+                return (
+                  <button
+                    onClick={() => {
+                      const newTiers = [...(settings.priceTiers ?? []), { unit: availableUnits[0] }];
+                      updateSettings({ priceTiers: newTiers });
+                    }}
+                    className="text-sm text-lime hover:text-lime/80 transition-colors"
+                  >
+                    + Add
+                  </button>
+                );
+              })()}
+            </div>
+
+            {(settings.priceTiers ?? []).length === 0 ? (
+              <p className="text-sm text-silver/50 italic">No other units set.</p>
+            ) : (
+              <div className="space-y-4">
+                {(settings.priceTiers ?? []).map((tier, index) => {
+                  const usedUnits = (settings.priceTiers ?? []).map((t, i) => i !== index ? t.unit : null).filter(Boolean);
+                  const allUnits: WeightUnit[] = ['g', 'oz', 'lb', 'kg'];
+                  // Exclude default unit (used by base prices) and already-used units
+                  const availableUnits = allUnits.filter(u => u !== settings.defaultWeightUnit && !usedUnits.includes(u));
+
+                  // Get the unit to display - use tier.unit if valid, otherwise first available
+                  const displayUnit = tier.unit && tier.unit !== settings.defaultWeightUnit ? tier.unit : availableUnits[0] || 'oz';
+
+                  // If tier has invalid/missing unit, update it
+                  if (!tier.unit || tier.unit === settings.defaultWeightUnit) {
+                    const newTiers = [...(settings.priceTiers ?? [])];
+                    newTiers[index] = { ...tier, unit: availableUnits[0] || 'oz' };
+                    updateSettings({ priceTiers: newTiers });
+                    return null; // Skip render this cycle, will re-render with correct unit
+                  }
+
+                  return (
+                    <div key={index} className="glass-card p-3 rounded-xl">
+                      <div className="grid grid-cols-[1fr_1fr_auto] gap-3 items-end">
+                        <div>
+                          <label className="block text-sm text-silver mb-1">Your Cost ($/{displayUnit})</label>
+                          <Input
+                            type="text"
+                            inputMode="decimal"
+                            placeholder="0.00"
+                            value={tier.costCents ? (tier.costCents / 100).toFixed(2) : ''}
+                            onChange={(e) => {
+                              const cents = parseMoney(e.target.value);
+                              const newTiers = [...(settings.priceTiers ?? [])];
+                              newTiers[index] = { ...tier, costCents: cents > 0 ? cents : undefined };
+                              updateSettings({ priceTiers: newTiers });
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm text-silver mb-1">Sale Price ($/{displayUnit})</label>
+                          <Input
+                            type="text"
+                            inputMode="decimal"
+                            placeholder="0.00"
+                            value={tier.saleCents ? (tier.saleCents / 100).toFixed(2) : ''}
+                            onChange={(e) => {
+                              const cents = parseMoney(e.target.value);
+                              const newTiers = [...(settings.priceTiers ?? [])];
+                              newTiers[index] = { ...tier, saleCents: cents > 0 ? cents : undefined };
+                              updateSettings({ priceTiers: newTiers });
+                            }}
+                          />
+                        </div>
+                        <Select
+                          value={displayUnit}
+                          onChange={(e) => {
+                            const newTiers = [...(settings.priceTiers ?? [])];
+                            newTiers[index] = { ...tier, unit: e.target.value as WeightUnit };
+                            updateSettings({ priceTiers: newTiers });
+                          }}
+                          options={availableUnits.map(u => ({ value: u, label: u }))}
+                        />
+                      </div>
+                      <button
+                        onClick={() => {
+                          const newTiers = (settings.priceTiers ?? []).filter((_, i) => i !== index);
+                          updateSettings({ priceTiers: newTiers });
+                        }}
+                        className="text-sm text-magenta hover:text-magenta/80 transition-colors mt-2"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Delivery Fee */}
+          <div className="border-t border-surface-600 pt-4 mt-4">
+            <h4 className="font-medium text-text-primary mb-3">Delivery Fee</h4>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm text-silver mb-1">Calculation Method</label>
+                <Select
+                  value={settings.deliveryFeeMethod}
+                  onChange={(e) => updateSettings({ deliveryFeeMethod: e.target.value as 'gas' | 'flat' })}
+                  options={[
+                    { value: 'gas', label: 'Calculate from mileage' },
+                    { value: 'flat', label: 'Manual entry only' },
+                  ]}
+                />
+              </div>
+
+              {settings.deliveryFeeMethod === 'gas' && (
+                <div>
+                  <label className="block text-sm text-silver mb-1">Vehicle Type</label>
+                  <Select
+                    value={settings.vehicleType}
+                    onChange={(e) => updateSettings({ vehicleType: e.target.value as 'compact' | 'sedan' | 'suv' | 'truck' | 'van' | 'hybrid' })}
+                    options={[
+                      { value: 'compact', label: 'Compact (32 MPG)' },
+                      { value: 'sedan', label: 'Sedan (28 MPG)' },
+                      { value: 'suv', label: 'SUV (22 MPG)' },
+                      { value: 'truck', label: 'Truck (18 MPG)' },
+                      { value: 'van', label: 'Van (20 MPG)' },
+                      { value: 'hybrid', label: 'Hybrid (45 MPG)' },
+                    ]}
+                  />
+                  <p className="text-xs text-silver/70 mt-1">
+                    Round-trip ÷ {{ compact: 32, sedan: 28, suv: 22, truck: 18, van: 20, hybrid: 45 }[settings.vehicleType]} MPG × $4.05/gal
+                  </p>
+                </div>
+              )}
+
+              {settings.deliveryFeeMethod === 'flat' && (
+                <p className="text-xs text-silver/70">
+                  Enter delivery fee manually for each order
+                </p>
+              )}
+            </div>
+          </div>
         </div>
       </Card>
 
@@ -288,43 +477,6 @@ export function Settings() {
               { value: 'kg', label: 'Kilograms (kg)' },
             ]}
           />
-
-          {/* Preset Weights */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-sm font-medium text-silver-light">Preset Weights</label>
-              {!editingPresets && (
-                <Button variant="ghost" size="sm" onClick={startEditingPresets}>
-                  Edit
-                </Button>
-              )}
-            </div>
-            {editingPresets ? (
-              <div className="space-y-3">
-                <Input
-                  placeholder="1, 2, 3.5, 7, 14, 28"
-                  value={presetsInput}
-                  onChange={(e) => setPresetsInput(e.target.value)}
-                />
-                <div className="flex gap-2">
-                  <Button variant="secondary" onClick={() => setEditingPresets(false)} className="flex-1">
-                    Cancel
-                  </Button>
-                  <Button onClick={handleUpdatePresets} className="flex-1">
-                    Save
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {settings.presetWeights.map((w) => (
-                  <span key={w} className="px-3 py-1.5 glass-card rounded-xl text-sm text-text-primary">
-                    {w}g
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
 
           <Select
             label="Timezone"
@@ -564,19 +716,20 @@ export function Settings() {
           {seedStatus === 'success' ? (
             <div className="text-center py-4">
               <p className="text-lime text-lg font-semibold">✅ Demo data loaded!</p>
-              <p className="text-silver text-sm mt-2">20 clients, 22 orders, $3,000 goal</p>
+              <p className="text-silver text-sm mt-2">12 clients, 14 products, varied orders, $1M goal</p>
             </div>
           ) : (
             <>
               <p className="text-silver">
-                This will clear existing data and load demo orders for January 2025.
+                This will create test data for integrity testing.
               </p>
               <ul className="text-sm text-silver space-y-1">
-                <li>• 15 Premium clients ($20/g)</li>
-                <li>• 5 Regular clients ($10/g)</li>
-                <li>• 22 total orders</li>
-                <li>• $4,575 billed, $1,805 paid, $2,770 owed</li>
-                <li>• Monthly goal: $3,000</li>
+                <li>• 6 Regular products (4 standard + 2 specialty bulk)</li>
+                <li>• 8 Premium products (4 standard + 4 specialty bulk)</li>
+                <li>• 6 Pay Now clients (fully paid)</li>
+                <li>• 6 Pay Later clients (with open orders)</li>
+                <li>• Delivery orders with calculated fees</li>
+                <li>• Monthly goal: $20,834</li>
               </ul>
             </>
           )}
@@ -596,7 +749,7 @@ export function Settings() {
                 onClick={async () => {
                   setSeedStatus('loading');
                   try {
-                    await seedDemoData();
+                    await seedTestData();
                     setSeedStatus('success');
                     setTimeout(() => window.location.reload(), 1500);
                   } catch (error) {

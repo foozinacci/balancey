@@ -3,9 +3,11 @@ import { useState, useEffect, type ReactNode } from 'react';
 import { ThreeBackground } from './ThreeBackground';
 import { Modal } from './Modal';
 import { Button } from './Button';
+import { NotificationSplash } from './NotificationSplash';
 import { audio } from '../utils/audio';
 import { useMonthlySessionCheck } from '../hooks/useMonthlySession';
 import { useSettings } from '../hooks/useData';
+import { usePaymentReminders } from '../hooks/usePaymentReminders';
 
 interface LayoutProps {
   children: ReactNode;
@@ -44,6 +46,65 @@ function LiveClock() {
   );
 }
 
+function NotificationBell() {
+  const { overdueOrders, dueSoonOrders } = usePaymentReminders();
+  const [testBadge, setTestBadge] = useState(0);
+  const totalReminders = overdueOrders.length + dueSoonOrders.length + testBadge;
+  const hasOverdue = overdueOrders.length > 0;
+
+  const handleClick = async () => {
+    // Request permission and show test notification
+    if ('Notification' in window) {
+      if (Notification.permission !== 'granted') {
+        await Notification.requestPermission();
+      }
+
+      if (Notification.permission === 'granted') {
+        new Notification('📅 Payment Reminder Test', {
+          body: 'This is how reminders will appear when orders are due!',
+          icon: '/balancey.png',
+        });
+        // Show demo badge for 5 seconds
+        setTestBadge(1);
+        setTimeout(() => setTestBadge(0), 5000);
+        audio.playSuccess();
+      }
+    }
+  };
+
+  return (
+    <button
+      onClick={handleClick}
+      className="relative p-2 rounded-xl hover:bg-surface-600/50 transition-colors"
+      title={totalReminders > 0 ? `${totalReminders} reminder${totalReminders > 1 ? 's' : ''}` : 'Tap to test notifications'}
+    >
+      {/* Envelope Icon */}
+      <svg
+        className={`w-6 h-6 ${hasOverdue ? 'text-magenta' : totalReminders > 0 ? 'text-gold' : 'text-silver'}`}
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={2}
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+        />
+      </svg>
+      {/* Badge */}
+      {totalReminders > 0 && (
+        <span
+          className={`absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center text-xs font-bold rounded-full ${hasOverdue ? 'bg-magenta text-white' : 'bg-gold text-black'
+            }`}
+        >
+          {totalReminders > 9 ? '9+' : totalReminders}
+        </span>
+      )}
+    </button>
+  );
+}
+
 export function Layout({ children }: LayoutProps) {
   const location = useLocation();
   const { showPrompt, handleStartNewSession, handleContinueSession } = useMonthlySessionCheck();
@@ -64,11 +125,17 @@ export function Layout({ children }: LayoutProps) {
       {/* Three.js animated background */}
       <ThreeBackground />
 
+      {/* Notification splash overlay */}
+      <NotificationSplash />
+
       {/* Mobile-width container for all content */}
       <div className="w-full max-w-md mx-auto flex flex-col min-h-[100dvh]">
         {/* Header */}
         <header className="glass-card rounded-none border-x-0 border-t-0 px-4 py-1 flex items-center justify-between sticky top-0 z-10">
-          <div className="w-24" /> {/* Spacer */}
+          {/* Notification Icon */}
+          <div className="w-24 flex items-center">
+            <NotificationBell />
+          </div>
           <Link
             to="/"
             onClick={handleNavClick}

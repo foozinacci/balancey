@@ -38,6 +38,7 @@ export interface Product {
   pricePerGramCents?: number;
   unitName?: string;
   pricePerUnitCents?: number;
+  weightPerItemGrams?: number; // Weight of each individual item/unit (e.g., 2g per egg)
   isActive: boolean;
 }
 
@@ -121,6 +122,13 @@ export interface OrderPolicy {
   computedWithheldUnits?: number;
 }
 
+// Price Tier for weight unit pricing
+export interface PriceTier {
+  unit: WeightUnit;        // Weight unit type (g, oz, lb, kg)
+  costCents?: number;      // Override: what you pay per unit (leave empty to use base)
+  saleCents?: number;      // Override: what you charge per unit (leave empty to use base)
+}
+
 // Settings
 export interface Settings {
   id: string;
@@ -128,6 +136,12 @@ export interface Settings {
   monthlyGoalCents?: number;
   monthlyClearedCents?: number; // Accumulated total from cleared paid orders
   currentMonthStart?: number; // Timestamp of current month start
+  // Base pricing (per gram)
+  baseCostCentsPerGram?: number;  // What you pay per gram (your cost)
+  baseSaleCentsPerGram?: number;  // What you charge per gram (regular price)
+  basePriceUnit?: WeightUnit;     // Unit for display (stored values are always per gram)
+  // Price tiers (preset weight amounts with optional override prices)
+  priceTiers?: PriceTier[];
   // Policy defaults
   depositMinPctNormal: number;
   holdbackPctNormal: number;
@@ -142,8 +156,8 @@ export interface Settings {
   doNotAdvanceBlocksOrder: boolean;
   maxAdvanceGrams?: number;
   maxOutstandingCents?: number;
-  // Presets
-  presetWeights: number[];
+  // Presets (deprecated)
+  presetWeights?: number[];
   // Display
   defaultWeightUnit: WeightUnit;
   gramsDecimalPlaces: number;
@@ -153,6 +167,10 @@ export interface Settings {
   // Typical order
   typicalOrderHistoryCount: number;
   typicalOrderIncludePartial: boolean;
+  // Delivery
+  deliveryFeeMethod: 'gas' | 'flat'; // 'gas' = calculate from mileage, 'flat' = manual entry
+  vehicleType: 'compact' | 'sedan' | 'suv' | 'truck' | 'van' | 'hybrid'; // Determines MPG for calculation
+  homeBaseAddress?: string; // Default start address for deliveries
   // Legacy (deprecated)
   dailyGoalCents?: number;
 }

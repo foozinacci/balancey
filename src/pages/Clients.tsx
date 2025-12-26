@@ -1,21 +1,16 @@
 import { useState, useMemo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useCustomers } from '../hooks/useData';
-import { createCustomer } from '../db/customers';
 import { Card } from '../components/Card';
-import { Button } from '../components/Button';
 import { Input } from '../components/Input';
-import { Modal } from '../components/Modal';
+import { NewClientModal } from '../components/NewClientModal';
 import { formatMoney } from '../utils/units';
-import { audio } from '../utils/audio';
 import type { CustomerWithBalance } from '../types';
 
 export function Clients() {
     const customers = useCustomers();
-    const navigate = useNavigate();
     const [searchQuery, setSearchQuery] = useState('');
     const [showNewClient, setShowNewClient] = useState(false);
-    const [newClientName, setNewClientName] = useState('');
     const [showPaid, setShowPaid] = useState(false);
 
     // Filter and sort clients
@@ -47,21 +42,6 @@ export function Clients() {
     }, [customers, searchQuery, showPaid]);
 
     const paidCount = customers.filter((c) => c.balanceDueCents === 0).length;
-
-    const handleCreateClient = async () => {
-        if (!newClientName.trim()) return;
-
-        try {
-            audio.playSuccess();
-            const client = await createCustomer({ name: newClientName.trim() });
-            setNewClientName('');
-            setShowNewClient(false);
-            navigate(`/customers/${client.id}`);
-        } catch (error) {
-            console.error('Failed to create client:', error);
-            audio.playError();
-        }
-    };
 
     return (
         <div className="p-4 space-y-4">
@@ -124,37 +104,10 @@ export function Clients() {
             </div>
 
             {/* New Client Modal */}
-            <Modal
+            <NewClientModal
                 isOpen={showNewClient}
                 onClose={() => setShowNewClient(false)}
-                title="New Client"
-            >
-                <div className="space-y-4">
-                    <Input
-                        label="Client Name"
-                        placeholder="Enter name..."
-                        value={newClientName}
-                        onChange={(e) => setNewClientName(e.target.value)}
-                        autoFocus
-                    />
-                    <div className="flex gap-3">
-                        <Button
-                            variant="secondary"
-                            onClick={() => setShowNewClient(false)}
-                            className="flex-1"
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            onClick={handleCreateClient}
-                            disabled={!newClientName.trim()}
-                            className="flex-1"
-                        >
-                            Create
-                        </Button>
-                    </div>
-                </div>
-            </Modal>
+            />
         </div>
     );
 }

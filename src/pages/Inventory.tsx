@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { useProducts, useSettings, useWasteHistory } from '../hooks/useData';
 import { createProduct, adjustInventory } from '../db/products';
+import { db } from '../db';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Select } from '../components/Select';
 import { Modal } from '../components/Modal';
-import { formatWeight, formatMoney, toGrams } from '../utils/units';
+import { formatWeight, toGrams } from '../utils/units';
 import type { Quality, SellMode, InventoryAdjustmentType, WeightUnit } from '../types';
 
 export function Inventory() {
@@ -17,9 +18,9 @@ export function Inventory() {
   const [showNewProduct, setShowNewProduct] = useState(false);
   const [newProductName, setNewProductName] = useState('');
   const [newProductQuality, setNewProductQuality] = useState<Quality>('REGULAR');
-  const [newProductPrice, setNewProductPrice] = useState('');
-  const [newProductPriceUnit, setNewProductPriceUnit] = useState<WeightUnit>('g');
-  const [newProductStock, setNewProductStock] = useState('');
+  const [newProductQuantity, setNewProductQuantity] = useState('');  // Number of items
+  const [newProductWeight, setNewProductWeight] = useState('');      // Weight per item
+  const [newProductWeightUnit, setNewProductWeightUnit] = useState<WeightUnit>('g');
 
   const [showAdjust, setShowAdjust] = useState(false);
   const [adjustProductId, setAdjustProductId] = useState<string | null>(null);
@@ -32,44 +33,63 @@ export function Inventory() {
   const handleCreateProduct = async () => {
     if (!newProductName.trim()) return;
 
-    const pricePerUnit = parseFloat(newProductPrice) || 0;
-    // Convert price to price per gram
-    // e.g., if $10/oz, then $10 / 28.3495g = $0.353/g
-    const gramsPerUnit = toGrams(1, newProductPriceUnit);
-    const pricePerGram = pricePerUnit / gramsPerUnit;
+    // Get price from Settings - Regular uses base price, Premium uses base + markup
+    const baseSale = settings?.baseSaleCentsPerGram ?? 0;
+    let pricePerGramCents: number;
+
+    if (newProductQuality === 'PREMIUM') {
+      const markupPct = settings?.premiumSalePct ?? 30;
+      pricePerGramCents = Math.round(baseSale * (1 + markupPct / 100));
+    } else {
+      pricePerGramCents = baseSale;
+    }
+
+    // Calculate weight per item in grams
+    const weightPerItem = parseFloat(newProductWeight) || 1;
+    const weightPerItemGrams = toGrams(weightPerItem, newProductWeightUnit);
 
     const product = await createProduct({
       name: newProductName.trim(),
       quality: newProductQuality,
       sellMode: 'WEIGHT' as SellMode,
-      pricePerGramCents: Math.round(pricePerGram * 100),
+      pricePerGramCents,
+      weightPerItemGrams, // Store weight per individual item
     });
 
-    // Add initial stock if provided
-    const initialStock = parseFloat(newProductStock) || 0;
-    if (initialStock > 0) {
-      await adjustInventory(product.id, 'RESTOCK', initialStock, 0, 'Initial stock');
+    // Add initial stock: Quantity × Weight per item = Total grams
+    const quantity = parseFloat(newProductQuantity) || 0;
+    if (quantity > 0 && weightPerItemGrams > 0) {
+      const totalGrams = quantity * weightPerItemGrams;
+      // Pass both grams AND units to track quantity independently
+      await adjustInventory(product.id, 'RESTOCK', totalGrams, quantity, `Initial stock: ${quantity} × ${weightPerItem}${newProductWeightUnit}`);
     }
 
     setNewProductName('');
-    setNewProductPrice('');
-    setNewProductPriceUnit('g');
-    setNewProductStock('');
+    setNewProductQuantity('');
+    setNewProductWeight('');
+    setNewProductWeightUnit(settings?.defaultWeightUnit ?? 'g');
     setShowNewProduct(false);
   };
 
   const handleAdjust = async () => {
     if (!adjustProductId) return;
 
-    const grams = parseFloat(adjustAmount) || 0;
-    if (grams <= 0) return;
+    const units = parseInt(adjustAmount) || 0;
+    if (units <= 0) return;
 
-    const adjustment = adjustType === 'WASTE' ? -grams : grams;
+    // Calculate grams based on units * weight per item
+    const product = products.find(p => p.id === adjustProductId);
+    const weightPerItem = product?.weightPerItemGrams ?? 0;
+    const grams = units * weightPerItem;
+
+    const gramsAdjustment = adjustType === 'WASTE' ? -grams : grams;
+    const unitsAdjustment = adjustType === 'WASTE' ? -units : units;
+
     await adjustInventory(
       adjustProductId,
       adjustType,
-      adjustment,
-      0,
+      gramsAdjustment,
+      unitsAdjustment,
       adjustNote.trim() || `${adjustType} adjustment`
     );
 
@@ -85,11 +105,53 @@ export function Inventory() {
     setShowAdjust(true);
   };
 
+  // Quick +1/-1 adjustments
+  const handleQuickOnHand = async (productId: string, delta: number) => {
+    const product = products.find(p => p.id === productId);
+    if (!product) return;
+    const weightPerItem = product.weightPerItemGrams ?? 1;
+    await adjustInventory(
+      productId,
+      delta > 0 ? 'RESTOCK' : 'WASTE',
+      delta * weightPerItem,
+      delta,
+      delta > 0 ? 'Quick +1' : 'Quick -1'
+    );
+  };
+
+  const handleQuickReserved = async (productId: string, delta: number) => {
+    const product = products.find(p => p.id === productId);
+    if (!product) return;
+    const weightPerItem = product.weightPerItemGrams ?? 1;
+    // Update reserved directly via db
+    const inventory = product.inventory;
+    await db.inventory.update(productId, {
+      reservedGrams: Math.max(0, inventory.reservedGrams + (delta * weightPerItem)),
+      reservedUnits: Math.max(0, inventory.reservedUnits + delta),
+      updatedAt: Date.now(),
+    });
+  };
+
   const unit = settings?.defaultWeightUnit ?? 'g';
 
-  // Group by quality
-  const regularProducts = products.filter((p) => p.quality === 'REGULAR');
-  const premiumProducts = products.filter((p) => p.quality === 'PREMIUM');
+  // Group by quality and sort by total value (weight × price) - cheapest first, most expensive last
+  // If same value, sort by availability (more available = higher priority, comes first)
+  const getTotalValue = (p: typeof products[0]) =>
+    (p.weightPerItemGrams ?? 0) * (p.pricePerGramCents ?? 0);
+
+  const sortProducts = (a: typeof products[0], b: typeof products[0]) => {
+    const valueDiff = getTotalValue(a) - getTotalValue(b);
+    if (valueDiff !== 0) return valueDiff;
+    // Same value, sort by availability (more available first)
+    return b.availableUnits - a.availableUnits;
+  };
+
+  const regularProducts = products
+    .filter((p) => p.quality === 'REGULAR')
+    .sort(sortProducts);
+  const premiumProducts = products
+    .filter((p) => p.quality === 'PREMIUM')
+    .sort(sortProducts);
 
   return (
     <div className="p-4 space-y-4">
@@ -116,7 +178,11 @@ export function Inventory() {
                     key={product.id}
                     product={product}
                     unit={unit}
-                    onRestock={() => openAdjustModal(product.id, 'RESTOCK')}
+                    settings={settings}
+                    onAddOnHand={() => handleQuickOnHand(product.id, 1)}
+                    onRemoveOnHand={() => handleQuickOnHand(product.id, -1)}
+                    onAddReserved={() => handleQuickReserved(product.id, 1)}
+                    onRemoveReserved={() => handleQuickReserved(product.id, -1)}
                     onWaste={() => openAdjustModal(product.id, 'WASTE')}
                   />
                 ))}
@@ -136,7 +202,11 @@ export function Inventory() {
                     key={product.id}
                     product={product}
                     unit={unit}
-                    onRestock={() => openAdjustModal(product.id, 'RESTOCK')}
+                    settings={settings}
+                    onAddOnHand={() => handleQuickOnHand(product.id, 1)}
+                    onRemoveOnHand={() => handleQuickOnHand(product.id, -1)}
+                    onAddReserved={() => handleQuickReserved(product.id, 1)}
+                    onRemoveReserved={() => handleQuickReserved(product.id, -1)}
                     onWaste={() => openAdjustModal(product.id, 'WASTE')}
                   />
                 ))}
@@ -144,11 +214,11 @@ export function Inventory() {
             </div>
           )}
 
-          {/* Waste - aggregated totals */}
+          {/* Shake - aggregated totals */}
           {wasteHistory.length > 0 && (
             <div>
               <h2 className="text-sm font-medium text-silver uppercase tracking-wider mb-2">
-                Waste
+                Shake
               </h2>
               <Card>
                 <div className="space-y-2">
@@ -207,6 +277,8 @@ export function Inventory() {
             onChange={(e) => setNewProductName(e.target.value)}
             autoFocus
           />
+
+          {/* Quality toggle - first */}
           <div>
             <label className="block text-sm font-medium text-silver mb-2">Quality</label>
             <div className="flex gap-2">
@@ -230,38 +302,44 @@ export function Inventory() {
               </button>
             </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-silver mb-1">Price per Weight ($)</label>
-            <div className="flex gap-2">
+
+          {/* Quantity | Weight per Item - same row */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-silver mb-1">Quantity</label>
               <Input
                 type="text"
-                inputMode="decimal"
-                placeholder="0.00"
-                value={newProductPrice}
-                onChange={(e) => setNewProductPrice(e.target.value)}
-                className="flex-1"
-              />
-              <Select
-                value={newProductPriceUnit}
-                onChange={(e) => setNewProductPriceUnit(e.target.value as WeightUnit)}
-                options={[
-                  { value: 'g', label: 'per g' },
-                  { value: 'oz', label: 'per oz' },
-                  { value: 'lb', label: 'per lb' },
-                  { value: 'kg', label: 'per kg' },
-                ]}
-                className="w-24"
+                inputMode="numeric"
+                placeholder="e.g., 15"
+                value={newProductQuantity}
+                onChange={(e) => setNewProductQuantity(e.target.value)}
               />
             </div>
+            <div>
+              <label className="block text-sm font-medium text-silver mb-1">Weight per Item</label>
+              <div className="flex gap-2">
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="e.g., 14"
+                  value={newProductWeight}
+                  onChange={(e) => setNewProductWeight(e.target.value)}
+                  className="flex-1"
+                />
+                <Select
+                  value={newProductWeightUnit}
+                  onChange={(e) => setNewProductWeightUnit(e.target.value as WeightUnit)}
+                  options={[
+                    { value: 'g', label: 'g' },
+                    { value: 'oz', label: 'oz' },
+                    { value: 'lb', label: 'lb' },
+                    { value: 'kg', label: 'kg' },
+                  ]}
+                  className="w-16"
+                />
+              </div>
+            </div>
           </div>
-          <Input
-            label="Initial Stock (g)"
-            type="text"
-            inputMode="decimal"
-            placeholder="0"
-            value={newProductStock}
-            onChange={(e) => setNewProductStock(e.target.value)}
-          />
           <div className="flex gap-2">
             <Button
               variant="secondary"
@@ -285,25 +363,31 @@ export function Inventory() {
       <Modal
         isOpen={showAdjust}
         onClose={() => setShowAdjust(false)}
-        title={adjustType === 'RESTOCK' ? 'Restock' : 'Record Waste'}
+        title={adjustType === 'RESTOCK' ? 'Restock' : 'Record Shake'}
       >
         <div className="space-y-3">
           {adjustProduct && (
             <div className="text-center py-2 glass-card rounded-xl">
               <div className="font-medium text-lime text-sm">{adjustProduct.name}</div>
               <div className="text-xs text-silver">
-                Current: {formatWeight(adjustProduct.inventory.onHandGrams, unit)}
+                Available: {adjustProduct.availableUnits} units ({formatWeight(adjustProduct.availableGrams, unit)})
               </div>
             </div>
           )}
-          <Input
-            label={`Amount (${unit})`}
-            type="text"
-            inputMode="decimal"
-            placeholder="0"
+          <Select
+            label="Quantity"
             value={adjustAmount}
             onChange={(e) => setAdjustAmount(e.target.value)}
-            autoFocus
+            options={(() => {
+              // For shake, limit to available units; for restock, allow up to 100
+              const maxUnits = adjustType === 'WASTE'
+                ? (adjustProduct?.availableUnits ?? 0)
+                : 100;
+              return Array.from({ length: maxUnits }, (_, i) => ({
+                value: String(i + 1),
+                label: String(i + 1),
+              }));
+            })()}
           />
           <Input
             label="Note"
@@ -332,13 +416,37 @@ export function Inventory() {
 interface ProductCardProps {
   product: ReturnType<typeof useProducts>[0];
   unit: 'g' | 'kg' | 'oz' | 'lb';
-  onRestock: () => void;
+  settings: ReturnType<typeof useSettings>;
+  onAddOnHand: () => void;
+  onRemoveOnHand: () => void;
+  onAddReserved: () => void;
+  onRemoveReserved: () => void;
   onWaste: () => void;
 }
 
-function ProductCard({ product, unit, onRestock, onWaste }: ProductCardProps) {
-  const isLow = product.availableGrams < 10;
+function ProductCard({ product, unit, settings, onAddOnHand, onRemoveOnHand, onAddReserved, onRemoveReserved, onWaste }: ProductCardProps) {
+  const isLow = product.availableUnits < 5;
   const isPremium = product.quality === 'PREMIUM';
+  const weightPerItem = product.weightPerItemGrams ?? 1;
+
+  // Calculate unit counts
+  const onHandUnits = product.inventory.onHandUnits;
+  const reservedUnits = product.inventory.reservedUnits;
+  const availableUnits = product.availableUnits;
+  const totalWeightGrams = availableUnits * weightPerItem;
+
+  // Calculate cost and worth using settings pricing
+  const baseCostPerGram = settings?.baseCostCentsPerGram ?? 500; // Default $5/g
+  const baseSalePerGram = settings?.baseSaleCentsPerGram ?? 1000; // Default $10/g
+  const premiumCostPct = settings?.premiumCostPct ?? 20; // Match Settings UI default
+  const premiumSalePct = settings?.premiumSalePct ?? 30; // Match Settings UI default
+
+  // Apply premium markups if premium product
+  const costPerGram = isPremium ? baseCostPerGram * (1 + premiumCostPct / 100) : baseCostPerGram;
+  const salePerGram = isPremium ? baseSalePerGram * (1 + premiumSalePct / 100) : baseSalePerGram;
+
+  const totalCostCents = Math.round(totalWeightGrams * costPerGram);
+  const totalWorthCents = Math.round(totalWeightGrams * salePerGram);
 
   return (
     <Card>
@@ -346,44 +454,97 @@ function ProductCard({ product, unit, onRestock, onWaste }: ProductCardProps) {
         <div>
           <h3 className={`font-medium ${isPremium ? 'text-gold' : 'text-text-primary'}`}>{product.name}</h3>
           <p className="text-sm text-silver">
-            {formatMoney(product.pricePerGramCents ?? 0)}/g
+            {formatWeight(weightPerItem, unit)} each
           </p>
         </div>
-        {isLow && (
-          <span className="px-2 py-0.5 text-xs font-medium bg-gold/20 text-gold rounded-full">
-            Low
+        <div className="flex items-center gap-2">
+          {isLow && (
+            <span className="px-2 py-0.5 text-xs font-medium bg-gold/20 text-gold rounded-full">
+              Low
+            </span>
+          )}
+          {/* Trash icon for shake/waste */}
+          <button
+            onClick={onWaste}
+            className="p-2 rounded-lg hover:bg-magenta/20 text-silver hover:text-magenta transition-colors"
+            title="Record Shake"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      {/* Units display with +/- controls */}
+      <div className="grid grid-cols-3 gap-2 text-center text-sm mb-2">
+        {/* On Hand with controls */}
+        <div>
+          <div className="flex items-center justify-center gap-1 mb-1">
+            <button
+              onClick={onRemoveOnHand}
+              disabled={onHandUnits <= 0}
+              className="w-6 h-6 rounded-md bg-surface-600 hover:bg-surface-500 text-silver hover:text-text-primary transition-colors disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold"
+            >
+              −
+            </button>
+            <span className="font-semibold text-text-primary w-6">{onHandUnits}</span>
+            <button
+              onClick={onAddOnHand}
+              className="w-6 h-6 rounded-md bg-lime/20 hover:bg-lime/30 text-lime transition-colors text-sm font-bold"
+            >
+              +
+            </button>
+          </div>
+          <div className="text-silver text-xs">On Hand</div>
+        </div>
+
+        {/* Reserved with controls */}
+        <div>
+          <div className="flex items-center justify-center gap-1 mb-1">
+            <button
+              onClick={onRemoveReserved}
+              disabled={reservedUnits <= 0}
+              className="w-6 h-6 rounded-md bg-surface-600 hover:bg-surface-500 text-silver hover:text-text-primary transition-colors disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold"
+            >
+              −
+            </button>
+            <span className="font-semibold text-gold w-6">{reservedUnits}</span>
+            <button
+              onClick={onAddReserved}
+              disabled={availableUnits <= 0}
+              className="w-6 h-6 rounded-md bg-gold/20 hover:bg-gold/30 text-gold transition-colors disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold"
+            >
+              +
+            </button>
+          </div>
+          <div className="text-silver text-xs">Reserved</div>
+        </div>
+
+        {/* Available (read-only) */}
+        <div>
+          <div className="font-semibold mb-1 h-6 flex items-center justify-center">
+            <span className={isLow ? 'text-magenta' : 'text-lime'}>{availableUnits}</span>
+          </div>
+          <div className="text-silver text-xs">Available</div>
+        </div>
+      </div>
+
+      {/* Weight and value summary */}
+      <div className="text-xs text-center space-y-1 pt-1 border-t border-silver/10">
+        <p className="text-silver">
+          {formatWeight(totalWeightGrams, unit)} total weight
+        </p>
+        <div className="flex justify-center gap-4">
+          {totalCostCents > 0 && (
+            <span className="text-magenta">
+              Cost: ${(totalCostCents / 100).toFixed(2)}
+            </span>
+          )}
+          <span className="text-lime">
+            Worth: ${(totalWorthCents / 100).toFixed(2)}
           </span>
-        )}
-      </div>
-
-      <div className="grid grid-cols-3 gap-2 text-center text-sm mb-3">
-        <div>
-          <div className="font-semibold text-text-primary">
-            {formatWeight(product.inventory.onHandGrams, unit)}
-          </div>
-          <div className="text-silver">On Hand</div>
         </div>
-        <div>
-          <div className="font-semibold text-gold">
-            {formatWeight(product.inventory.reservedGrams, unit)}
-          </div>
-          <div className="text-silver">Reserved</div>
-        </div>
-        <div>
-          <div className={`font-semibold ${isLow ? 'text-magenta' : 'text-lime'}`}>
-            {formatWeight(product.availableGrams, unit)}
-          </div>
-          <div className="text-silver">Available</div>
-        </div>
-      </div>
-
-      <div className="flex gap-2">
-        <Button variant="secondary" size="sm" onClick={onRestock} className="flex-1">
-          + Restock
-        </Button>
-        <Button variant="ghost" size="sm" onClick={onWaste} className="flex-1">
-          - Waste
-        </Button>
       </div>
     </Card>
   );
