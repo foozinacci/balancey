@@ -50,8 +50,17 @@ export const db = new BalanceyDB();
 // Default settings
 export const DEFAULT_SETTINGS: Settings = {
   id: 'default',
+  // Monthly goal
+  monthlyGoalCents: 0,
+  monthlyClearedCents: 0,
+  // Pricing - base rates per gram
+  baseCostCentsPerGram: 0,
+  baseSaleCentsPerGram: 0,
+  premiumCostPct: 20, // Premium costs 20% more
+  premiumSalePct: 30, // Premium sells 30% more
   // Price tiers start empty - users add their own custom price points
   priceTiers: [],
+  // Policies
   depositMinPctNormal: 0,
   holdbackPctNormal: 0,
   depositMinPctOverTypical: 0,
@@ -59,12 +68,14 @@ export const DEFAULT_SETTINGS: Settings = {
   depositMinPctLate: 0,
   holdbackPctLate: 0,
   doNotAdvanceBlocksOrder: true,
-  presetWeights: [1, 2, 3.5, 7, 14, 28],
+  // Display
   defaultWeightUnit: 'g',
   gramsDecimalPlaces: 1,
   defaultDueDays: 7,
+  // Order history
   typicalOrderHistoryCount: 10,
   typicalOrderIncludePartial: true,
+  // Delivery
   deliveryFeeMethod: 'gas',
   vehicleType: 'sedan',
 };
